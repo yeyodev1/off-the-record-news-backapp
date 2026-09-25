@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { env } from "../config/env";
 import { dbConnect, isConnected } from "../config/mongo";
 import { CustomError } from "../errors/customError.error";
+import * as cronController from "../controllers/cron.controller";
 
 const router = Router();
 
@@ -22,20 +23,20 @@ function soloCron(req: Request, _res: Response, next: NextFunction) {
   next();
 }
 
-/**
- * GET /api/cron/ping — tarea de ejemplo (ver `crons` en vercel.json).
- * Vercel Cron solo hace GET, de ahí el verbo aunque la tarea escriba.
- */
-router.get("/ping", soloCron, async (_req, res, next) => {
-  try {
-    if (!isConnected() && !(await dbConnect())) {
-      throw new CustomError("Sin base de datos", 503);
-    }
-    console.log("[cron] ping");
-    res.status(200).json({ ok: true, at: new Date().toISOString() });
-  } catch (error) {
-    next(error);
+/** Las tareas escriben en la base: se asegura la conexión antes de correrlas. */
+async function conBase(_req: Request, _res: Response, next: NextFunction) {
+  if (!isConnected() && !(await dbConnect())) {
+    return next(new CustomError("Sin base de datos", 503));
   }
-});
+  next();
+}
+
+// Vercel Cron solo hace GET, de ahí el verbo aunque las tareas escriban.
+router.use(soloCron, conBase);
+
+router.get("/newsroom", cronController.newsroom);
+router.get("/newsletter/manana", cronController.newsletterManana);
+router.get("/newsletter/noche", cronController.newsletterNoche);
+router.get("/subscriptions", cronController.subscriptions);
 
 export default router;
