@@ -59,6 +59,8 @@ export interface Infographic {
 export interface ArticleSource {
   name: string;
   url: string;
+  /** Lo que dice esa nota, tomado de su propia descripción: se lee sin entrar. */
+  summary?: string;
 }
 
 export interface IArticle {
@@ -136,7 +138,10 @@ const articleSchema = new Schema<IArticle>(
     tags: { type: [String], default: [] },
     image: { type: imageSchema, default: null },
     infographic: { type: infographicSchema, default: null },
-    sources: { type: [{ _id: false, name: String, url: String }], default: [] },
+    sources: {
+      type: [{ _id: false, name: String, url: String, summary: { type: String, default: "" } }],
+      default: [],
+    },
     score: { type: scoreSchema, default: null },
     status: { type: String, enum: ARTICLE_STATUSES, default: "pending" },
     origin: { type: String, enum: ARTICLE_ORIGINS, default: "ai" },
