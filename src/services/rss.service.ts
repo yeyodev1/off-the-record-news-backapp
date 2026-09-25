@@ -148,25 +148,54 @@ export async function fetchFeed(url: string, limit = 25): Promise<FeedItem[]> {
   return parseFeed(xml).slice(0, limit);
 }
 
-/** og:image de una página. Solo lee los primeros ~300 KB y nunca lanza. */
+/** Solo el <head> de una página (máx. ~300 KB): ahí están la imagen y la descripción. */
+async function fetchHead(pageUrl: string): Promise<string> {
+  const response = await fetch(pageUrl, {
+    headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+    redirect: "follow",
+    signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+  });
+  if (!response.ok || !response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let html = "";
+  while (html.length < 300_000) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    html += decoder.decode(value, { stream: true });
+    if (/<\/head>/i.test(html)) break;
+  }
+  reader.cancel().catch(() => undefined);
+  return html;
+}
+
+function metaContent(html: string, names: string[]): string {
+  for (const name of names) {
+    const attr = name.startsWith("og:") ? "property" : "name";
+    const match =
+      html.match(
+        new RegExp(`<meta[^>]+${attr}=["']${name}["'][^>]+content=["']([^"']+)["']`, "i"),
+      ) ||
+      html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+${attr}=["']${name}["']`, "i"));
+    if (match) return decodeEntities(match[1]).trim();
+  }
+  return "";
+}
+
+/** La descripción que el propio medio da de su nota (og:description o description). */
+export async function fetchPageSummary(pageUrl: string): Promise<string> {
+  try {
+    const html = await fetchHead(pageUrl);
+    return metaContent(html, ["og:description", "description", "twitter:description"]);
+  } catch {
+    return "";
+  }
+}
+
+/** og:image de una página. Nunca lanza. */
 export async function fetchOgImage(pageUrl: string): Promise<string> {
   try {
-    const response = await fetch(pageUrl, {
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
-    });
-    if (!response.ok || !response.body) return "";
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let html = "";
-    while (html.length < 300_000) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      html += decoder.decode(value, { stream: true });
-      if (/<\/head>/i.test(html)) break;
-    }
-    reader.cancel().catch(() => undefined);
+    const html = await fetchHead(pageUrl);
     const match =
       html.match(/<meta[^>]+property=["']og:image(?::url)?["'][^>]+content=["']([^"']+)["']/i) ||
       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::url)?["']/i) ||
