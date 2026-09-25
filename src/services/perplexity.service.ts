@@ -59,6 +59,40 @@ async function chat(body: Record<string, unknown>, attempt = 1): Promise<Perplex
   return (await response.json()) as PerplexityResponse;
 }
 
+/**
+ * Respaldo de redacción: Perplexity con la búsqueda apagada, para que trabaje
+ * solo con el material que le damos (igual que Claude) y devuelva JSON validado.
+ */
+export async function chatJson<T>(opts: {
+  system: string;
+  prompt: string;
+  schema: Record<string, unknown>;
+  maxTokens: number;
+}): Promise<T> {
+  const data = await chat({
+    model: env.PERPLEXITY_WRITING_MODEL,
+    max_tokens: opts.maxTokens,
+    disable_search: true,
+    messages: [
+      { role: "system", content: opts.system },
+      { role: "user", content: opts.prompt },
+    ],
+    response_format: { type: "json_schema", json_schema: { schema: opts.schema } },
+  });
+  const raw = data.choices?.[0]?.message?.content ?? "";
+  // Algunos modelos anteponen razonamiento o envuelven el JSON en un bloque de código.
+  const text = raw
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/^\s*```(?:json)?/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new CustomError("La IA de respaldo devolvió un formato inválido", 502);
+  }
+}
+
 function hostName(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
