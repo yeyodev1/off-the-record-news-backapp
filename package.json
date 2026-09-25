@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
+    "@vercel/oidc": "^3.8.9",
     "axios": "^1.7.9",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
