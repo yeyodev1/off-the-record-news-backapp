@@ -192,7 +192,17 @@ export async function fetchPageSummary(pageUrl: string): Promise<string> {
   }
 }
 
-/** og:image de una página. Nunca lanza. */
+/**
+ * Cuando una nota no tiene foto propia, muchos medios ponen su logo o una
+ * imagen por defecto como og:image. Eso no es una foto de la noticia.
+ */
+export function isGenericImage(url: string): boolean {
+  return /logo|default|placeholder|no[-_]?image|share[-_]?image|og[-_]image[-_]?(site|home)|favicon|avatar/i.test(
+    url.split("?")[0],
+  );
+}
+
+/** og:image de una página, salvo que sea un logo o imagen genérica. Nunca lanza. */
 export async function fetchOgImage(pageUrl: string): Promise<string> {
   try {
     const html = await fetchHead(pageUrl);
@@ -201,7 +211,7 @@ export async function fetchOgImage(pageUrl: string): Promise<string> {
       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::url)?["']/i) ||
       html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
     const url = match ? decodeEntities(match[1]) : "";
-    return /^https?:\/\//.test(url) ? url : "";
+    return /^https?:\/\//.test(url) && !isGenericImage(url) ? url : "";
   } catch {
     return "";
   }
