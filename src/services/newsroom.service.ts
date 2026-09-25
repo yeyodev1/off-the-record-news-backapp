@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { env } from "../config/env";
 import { CustomError } from "../errors/customError.error";
-import { Article, ArticleImage } from "../models/article.model";
+import { Article, ArticleImage, ArticleSource } from "../models/article.model";
 import { PipelineRun } from "../models/pipelineRun.model";
 import { Signal } from "../models/signal.model";
 import { Source } from "../models/source.model";
@@ -206,17 +206,23 @@ function similar(a: string, b: string): boolean {
   return inter / (wa.size + wb.size - inter) >= 0.45;
 }
 
-async function imageForSignal(signal: any): Promise<ArticleImage | null> {
-  let url = signal.imageUrl as string;
-  if (!url && signal.url) url = await rssService.fetchOgImage(signal.url);
-  if (!url) return null;
-  return {
-    url,
-    credit: `Foto: ${signal.sourceName}`,
-    sourceName: signal.sourceName,
-    sourceUrl: signal.url,
-    kind: "photo",
-  };
+async function imageForSignal(
+  signal: any,
+  sources: ArticleSource[] = [],
+): Promise<ArticleImage | null> {
+  if (signal.imageUrl && !rssService.isGenericImage(signal.imageUrl)) {
+    return photoCredit(signal.imageUrl, signal.sourceName, signal.url);
+  }
+  if (signal.url) {
+    const url = await rssService.fetchOgImage(signal.url);
+    if (url) return photoCredit(url, signal.sourceName, signal.url);
+  }
+  // El medio original no trae foto: se usa la de otra fuente citada, con su crédito.
+  return articleService.imageFromSources(sources);
+}
+
+function photoCredit(url: string, sourceName: string, sourceUrl: string): ArticleImage {
+  return { url, credit: `Foto: ${sourceName}`, sourceName, sourceUrl, kind: "photo" };
 }
 
 /**
@@ -249,7 +255,7 @@ export async function draftSignal(signal: any, { dedupe = false } = {}) {
     },
     research,
   );
-  const image = await imageForSignal(signal);
+  const image = await imageForSignal(signal, draft.sources);
   // Fuera de la fila: leer las páginas de las fuentes es lo lento. Si el medio
   // original bloquea la lectura, su resumen del RSS sirve de respaldo.
   draft.sources = await articleService.enrichSources(draft.sources, {
