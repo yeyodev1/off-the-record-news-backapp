@@ -1,6 +1,7 @@
 import { isValidObjectId, Types } from "mongoose";
 import { CustomError } from "../errors/customError.error";
 import {
+  ArticleSource,
   Article,
   ArticleImage,
   ArticleOrigin,
@@ -16,6 +17,8 @@ import { slugify } from "../utils/slugify";
 import * as anthropicService from "./anthropic.service";
 import { ArticleDraft } from "./anthropic.service";
 import * as cloudinaryService from "./cloudinary.service";
+import * as rssService from "./rss.service";
+import { mapLimit, stripHtml, truncate } from "../utils/text";
 
 type ArticleJSON = Record<string, unknown> & { id: string };
 
@@ -187,6 +190,24 @@ export async function getById(id: string) {
   return (await getDoc(id)).toJSON();
 }
 
+const SOURCE_SUMMARY_MAX = 240;
+
+/**
+ * Completa `summary` de cada fuente con la descripción que el medio publica en
+ * su nota, para que el lector sepa qué dice sin salir. Nunca lanza: una fuente
+ * que bloquea la lectura simplemente queda sin resumen.
+ */
+export async function enrichSources(
+  sources: ArticleSource[],
+  known: Record<string, string> = {},
+): Promise<ArticleSource[]> {
+  return mapLimit(sources, 4, async (source) => {
+    if (source.summary || !source.url) return source;
+    const summary = (await rssService.fetchPageSummary(source.url)) || known[source.url] || "";
+    return { ...source, summary: truncate(stripHtml(summary), SOURCE_SUMMARY_MAX) };
+  });
+}
+
 export async function createFromDraft(
   draft: ArticleDraft,
   opts: {
@@ -201,6 +222,7 @@ export async function createFromDraft(
   const status = opts.status ?? "pending";
   const doc = await Article.create({
     ...draft,
+    sources: await enrichSources(draft.sources),
     slug: await uniqueSlug(draft.title),
     origin: opts.origin,
     status,
