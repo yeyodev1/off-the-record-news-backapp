@@ -13,15 +13,20 @@
     "compile": "tsc --watch",
     "start": "node dist/index.js",
     "seed:admin": "ts-node-dev --transpile-only src/scripts/seed-admin.ts",
-    "format": "prettier --write 'src/**/*.{ts,json,md}' 'api/**/*.ts'"
+    "format": "prettier --write 'src/**/*.{ts,json,md}' 'api/**/*.ts'",
+    "seed:sources": "ts-node-dev --transpile-only src/scripts/seed-sources.ts",
+    "newsroom:run": "ts-node-dev --transpile-only src/scripts/run-newsroom.ts",
+    "telegram:webhook": "ts-node-dev --transpile-only src/scripts/set-telegram-webhook.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "axios": "^1.7.9",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
+    "fast-xml-parser": "^5.11.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
     "multer": "^2.1.1",
