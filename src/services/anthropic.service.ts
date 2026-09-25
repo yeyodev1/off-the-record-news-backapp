@@ -29,7 +29,15 @@ function getClient(): Anthropic {
   }
   if (!client) {
     // Timeout corto y un solo reintento: el ciclo completo tiene que caber en ~250 s.
-    client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, timeout: 120_000, maxRetries: 1 });
+    client = new Anthropic({
+      apiKey: env.ANTHROPIC_API_KEY,
+      timeout: 120_000,
+      maxRetries: 1,
+      // Las llaves de organización sin workspace exigen este header en cada request.
+      defaultHeaders: env.ANTHROPIC_WORKSPACE_ID
+        ? { "anthropic-workspace-id": env.ANTHROPIC_WORKSPACE_ID }
+        : undefined,
+    });
   }
   return client;
 }
