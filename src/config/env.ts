@@ -58,6 +58,8 @@ export const env = {
   AI_SCORING_MODEL: optional("AI_SCORING_MODEL", "claude-haiku-4-5-20251001"),
   AI_WRITING_MODEL: optional("AI_WRITING_MODEL", "claude-sonnet-5"),
   PERPLEXITY_MODEL: optional("PERPLEXITY_MODEL", "sonar"),
+  // Redacta cuando Claude no está disponible.
+  PERPLEXITY_WRITING_MODEL: optional("PERPLEXITY_WRITING_MODEL", "sonar-pro"),
 
   // Redacción automática
   PUBLISH_THRESHOLD: Number(optional("PUBLISH_THRESHOLD", "7")),
