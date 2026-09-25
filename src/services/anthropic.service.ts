@@ -448,9 +448,24 @@ function cleanDraft(draft: ArticleDraft): ArticleDraft {
     body: draft.body.filter(Boolean),
     tags: [...new Set(draft.tags.map((t) => t.toLowerCase().trim()).filter(Boolean))].slice(0, 5),
     section: SECTIONS.includes(draft.section) ? draft.section : "politica",
-    sources: draft.sources.filter((s) => s.name),
+    sources: uniqueSources(draft.sources),
     infographic,
   };
+}
+
+/** Una fuente por URL: la IA a veces cita dos veces la misma nota. */
+function uniqueSources(sources: ArticleSource[]): ArticleSource[] {
+  const seen = new Set<string>();
+  return sources
+    .map((s) => ({ name: s.name.trim(), url: s.url.trim() }))
+    .filter((s) => {
+      if (!s.name) return false;
+      const key = (s.url || s.name).toLowerCase().replace(/[?#].*$/, "").replace(/\/$/, "");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
 }
 
 async function draftFrom(prompt: string): Promise<ArticleDraft> {
