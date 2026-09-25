@@ -17,7 +17,8 @@ const QUESTIONS: Record<string, JevQuestion> = {
     instructions: "¿El hecho ocurre en Ecuador o afecta directamente a ecuatorianos?",
     criteria: {
       true: "pasa en Ecuador, involucra a autoridades, empresas o ciudadanos ecuatorianos, o cambia algo para Ecuador",
-      false: "hecho extranjero sin vínculo concreto con Ecuador (moda, farándula, deportes o política de otros países)",
+      false:
+        "hecho extranjero sin vínculo concreto con Ecuador (moda, farándula, deportes o política de otros países)",
     },
   },
   noticia: {
@@ -25,7 +26,8 @@ const QUESTIONS: Record<string, JevQuestion> = {
     instructions: "¿Es un hecho noticioso que se puede reportar?",
     criteria: {
       true: "un hecho concreto: algo que pasó, se anunció, se aprobó o se denunció",
-      false: "opinión, editorial, columna, cartas de lectores, portada o índice de un medio, horóscopo, publicidad",
+      false:
+        "opinión, editorial, columna, cartas de lectores, portada o índice de un medio, página de archivo o listado de documentos, texto que dice que no hay información o que algo no ocurrió, horóscopo, publicidad",
     },
   },
   duplicado: {
@@ -134,7 +136,9 @@ async function scoreOne(signal: SignalForScoring, headlines: string[]): Promise<
     impacto: scale(answers.impacto),
   };
   const seccion = answers.seccion?.type === "choice" ? answers.seccion.choice : "";
-  const section = (SECTIONS as readonly string[]).includes(seccion) ? (seccion as Section) : "politica";
+  const section = (SECTIONS as readonly string[]).includes(seccion)
+    ? (seccion as Section)
+    : "politica";
 
   const noticia = prob(answers.noticia);
   return {
@@ -159,13 +163,17 @@ export async function scoreSignals(
     try {
       return await scoreOne(s, recentHeadlines);
     } catch (error) {
-      console.warn(`[jev] no se pudo valorar "${truncate(s.title, 60)}":`, (error as Error).message);
+      console.warn(
+        `[jev] no se pudo valorar "${truncate(s.title, 60)}":`,
+        (error as Error).message,
+      );
       return null;
     }
   });
   const scored = results.filter((r): r is SignalScore => r !== null);
   // Si falló todo el lote es un problema del gateway, no de las señales: que el ciclo lo registre.
-  if (signals.length && !scored.length) throw new Error("Jev no pudo valorar ninguna señal del lote");
+  if (signals.length && !scored.length)
+    throw new Error("Jev no pudo valorar ninguna señal del lote");
   return scored;
 }
 
@@ -179,7 +187,11 @@ export async function isSameStory(
 ): Promise<boolean> {
   if (!others.length) return false;
   const answers = await evaluate(
-    { hecho: truncate(candidate.title, 200), resumen: truncate(candidate.summary, 400), notas: others.slice(0, 40) },
+    {
+      hecho: truncate(candidate.title, 200),
+      resumen: truncate(candidate.summary, 400),
+      notas: others.slice(0, 40),
+    },
     {
       mismo: {
         type: "boolean",
