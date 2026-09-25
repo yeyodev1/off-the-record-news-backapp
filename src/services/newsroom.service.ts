@@ -8,6 +8,8 @@ import { Source } from "../models/source.model";
 import { paginate } from "../utils/paginate";
 import { errorMessage, mapLimit, normalizeTitle, normalizeUrl, sha1 } from "../utils/text";
 import * as anthropicService from "./anthropic.service";
+import * as gatewayService from "./gateway.service";
+import * as jevService from "./jev.service";
 import * as articleService from "./article.service";
 import * as perplexityService from "./perplexity.service";
 import * as rssService from "./rss.service";
@@ -155,7 +157,9 @@ async function scorePending(signals: any[], errors: string[]): Promise<number> {
 
   const counts = await mapLimit(batches, 3, async (batch) => {
     try {
-      const scores = await anthropicService.scoreSignals(
+      // Jev decide cuando hay AI Gateway; si no, valora Claude.
+      const scorer = gatewayService.isGatewayConfigured() ? jevService : anthropicService;
+      const scores = await scorer.scoreSignals(
         batch.map((s) => ({
           ref: String(s._id),
           title: s.title,
@@ -169,7 +173,10 @@ async function scorePending(signals: any[], errors: string[]): Promise<number> {
         scores.map((r) =>
           Signal.updateOne(
             { _id: r.ref },
-            { score: r.score, status: r.duplicate ? "duplicate" : "scored" },
+            {
+              score: r.score,
+              status: r.notNews ? "discarded" : r.duplicate ? "duplicate" : "scored",
+            },
           ),
         ),
       );
@@ -268,7 +275,7 @@ export async function runCycle({
     );
   }
   if (!anthropicService.isAiConfigured()) {
-    return finish("IA sin configurar (falta ANTHROPIC_API_KEY)");
+    return finish("IA sin configurar (falta AI Gateway, ANTHROPIC_API_KEY o PERPLEXITY_API_KEY)");
   }
 
   // 1. Recolección
@@ -325,7 +332,11 @@ export async function runCycle({
   );
   for (const c of ranked) {
     if (picked.length >= env.MAX_DRAFTS_PER_RUN) break;
-    const clash = [...headlines, ...picked.map((p) => p.title)].some((t) => similar(t, c.title));
+    const others = [...headlines, ...picked.map((p) => p.title)];
+    let clash = others.some((t) => similar(t, c.title));
+    if (!clash && gatewayService.isGatewayConfigured()) {
+      clash = await jevService.isSameStory(c, others).catch(() => false);
+    }
     if (clash) {
       c.status = "duplicate";
       await c.save();
