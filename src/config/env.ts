@@ -53,6 +53,7 @@ export const env = {
 
   // IA: Claude valora y redacta; Perplexity busca en la web en tiempo real.
   ANTHROPIC_API_KEY: optional("ANTHROPIC_API_KEY", ""),
+  ANTHROPIC_WORKSPACE_ID: optional("ANTHROPIC_WORKSPACE_ID", ""),
   PERPLEXITY_API_KEY: optional("PERPLEXITY_API_KEY", ""),
   AI_SCORING_MODEL: optional("AI_SCORING_MODEL", "claude-haiku-4-5-20251001"),
   AI_WRITING_MODEL: optional("AI_WRITING_MODEL", "claude-sonnet-5"),
