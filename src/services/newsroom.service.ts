@@ -219,8 +219,23 @@ async function imageForSignal(signal: any): Promise<ArticleImage | null> {
   };
 }
 
-/** Investiga y redacta una señal. Lanza si la IA falla. */
-export async function draftSignal(signal: any) {
+/**
+ * Revisar-y-guardar va de a uno: la redacción corre en paralelo, pero si dos
+ * notas del mismo hecho terminan a la vez, la segunda tiene que ver a la primera.
+ */
+let saveQueue: Promise<unknown> = Promise.resolve();
+function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
+  const next = saveQueue.then(task, task);
+  saveQueue = next.catch(() => undefined);
+  return next;
+}
+
+/**
+ * Investiga y redacta una señal. Lanza si la IA falla. Con `dedupe`, Jev compara
+ * el titular ya redactado con lo publicado y descarta la nota si es el mismo hecho
+ * (el titular crudo de cada medio casi nunca coincide; el redactado sí se parece).
+ */
+export async function draftSignal(signal: any, { dedupe = false } = {}) {
   const research = await perplexityService.research(
     `${signal.title}. ${signal.summary}`.slice(0, 800),
   );
@@ -235,6 +250,21 @@ export async function draftSignal(signal: any) {
     research,
   );
   const image = await imageForSignal(signal);
+  return oneAtATime(async () => {
+    if (dedupe && gatewayService.isGatewayConfigured()) {
+      const headlines = await recentHeadlines();
+      const same = await jevService.isSameStory({ title: draft.title, summary: draft.lede }, headlines);
+      if (same) {
+        signal.status = "duplicate";
+        await signal.save();
+        return null;
+      }
+    }
+    return saveDraft(signal, draft, image);
+  });
+}
+
+async function saveDraft(signal: any, draft: any, image: ArticleImage | null) {
   const article = await articleService.createFromDraft(draft, {
     origin: "ai",
     status: env.AUTO_PUBLISH ? "published" : "pending",
@@ -335,7 +365,10 @@ export async function runCycle({
     const others = [...headlines, ...picked.map((p) => p.title)];
     let clash = others.some((t) => similar(t, c.title));
     if (!clash && gatewayService.isGatewayConfigured()) {
-      clash = await jevService.isSameStory(c, others).catch(() => false);
+      clash = await jevService.isSameStory(c, others).catch((error) => {
+        errors.push(`Jev (repetidas): ${errorMessage(error)}`);
+        return false;
+      });
     }
     if (clash) {
       c.status = "duplicate";
@@ -351,8 +384,9 @@ export async function runCycle({
       return false;
     }
     try {
-      await draftSignal(signal);
-      return true;
+      const article = await draftSignal(signal, { dedupe: true });
+      if (!article) errors.push(`Descartada por repetida tras redactar: "${signal.title}"`);
+      return Boolean(article);
     } catch (error) {
       errors.push(`Redacción "${signal.title}": ${errorMessage(error)}`);
       return false;
