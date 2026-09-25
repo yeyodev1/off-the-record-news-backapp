@@ -18,6 +18,8 @@ const whitelist = [
 
 /** Previews de Vercel y túneles de desarrollo: permitidos. */
 const allowedPatterns: RegExp[] = [
+  // Cualquier puerto local: varios proyectos corren a la vez y el front no siempre cae en 5173.
+  /^http:\/\/(localhost|127\.0\.0\.1):\d+$/,
   /^https:\/\/[a-z0-9-]+\.vercel\.app$/i,
   /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i,
   /^https:\/\/[a-z0-9-]+\.bakano\.ec$/i,
