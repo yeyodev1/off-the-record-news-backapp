@@ -12,6 +12,7 @@ import {
 import { Edition } from "../models/subscriber.model";
 import { truncate } from "../utils/text";
 import { chatJson as perplexityJson, isPerplexityConfigured } from "./perplexity.service";
+import { chatJson as gatewayJson, isGatewayConfigured } from "./gateway.service";
 
 /**
  * Claude es la mesa de redacción: Haiku valora en lote (barato y rápido) y
@@ -44,7 +45,7 @@ function getClient(): Anthropic {
 }
 
 export function isAiConfigured(): boolean {
-  return !!env.ANTHROPIC_API_KEY || isPerplexityConfigured();
+  return isGatewayConfigured() || !!env.ANTHROPIC_API_KEY || isPerplexityConfigured();
 }
 
 /**
@@ -224,6 +225,8 @@ export interface SignalScore {
   score: ScoreBreakdown;
   duplicate: boolean;
   section: Section;
+  /** Opinión, cartas, portadas: no es un hecho que se pueda reportar. */
+  notNews?: boolean;
 }
 
 export interface ArticleDraft {
@@ -256,7 +259,19 @@ interface CallOptions {
   maxTokens: number;
 }
 
+/**
+ * Orden de preferencia: Claude por el Vercel AI Gateway (sin llave de proveedor
+ * que mantener), Claude con llave directa y, si nada de eso responde, Perplexity.
+ */
 async function callJson<T>(opts: CallOptions): Promise<T> {
+  if (isGatewayConfigured()) {
+    try {
+      const model = opts.model.includes("haiku") ? env.GATEWAY_FAST_MODEL : env.GATEWAY_WRITING_MODEL;
+      return await gatewayJson<T>({ ...opts, model });
+    } catch (error) {
+      console.warn(`[ia] AI Gateway falló (${(error as Error).message}); pruebo el respaldo`);
+    }
+  }
   const claudeUsable = !!env.ANTHROPIC_API_KEY && Date.now() >= claudeDownUntil;
   if (claudeUsable) {
     try {
