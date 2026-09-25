@@ -34,6 +34,23 @@ export async function dbConnect(): Promise<boolean> {
 
   try {
     await promesa;
+    // La promesa guardada puede ser de una conexión que ya se cayó: Mongoose
+    // reconecta solo, pero hay que esperarlo o las consultas fallan mientras tanto.
+    if (!isConnected()) {
+      await Promise.race([
+        mongoose.connection.asPromise(),
+        new Promise((resolve) => setTimeout(resolve, 8000)),
+      ]);
+    }
+    if (!isConnected()) {
+      promesa = null;
+      await mongoose.disconnect().catch(() => undefined);
+      promesa = mongoose.connect(env.DB_URI, {
+        serverSelectionTimeoutMS: 8000,
+        bufferCommands: false,
+      });
+      await promesa;
+    }
     console.log("Connected to MongoDB");
     return true;
   } catch (error) {
