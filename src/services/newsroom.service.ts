@@ -250,10 +250,18 @@ export async function draftSignal(signal: any, { dedupe = false } = {}) {
     research,
   );
   const image = await imageForSignal(signal);
+  // Fuera de la fila: leer las páginas de las fuentes es lo lento. Si el medio
+  // original bloquea la lectura, su resumen del RSS sirve de respaldo.
+  draft.sources = await articleService.enrichSources(draft.sources, {
+    [signal.url]: signal.summary ?? "",
+  });
   return oneAtATime(async () => {
     if (dedupe && gatewayService.isGatewayConfigured()) {
       const headlines = await recentHeadlines();
-      const same = await jevService.isSameStory({ title: draft.title, summary: draft.lede }, headlines);
+      const same = await jevService.isSameStory(
+        { title: draft.title, summary: draft.lede },
+        headlines,
+      );
       if (same) {
         signal.status = "duplicate";
         await signal.save();
