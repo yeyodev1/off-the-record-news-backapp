@@ -134,6 +134,9 @@ const discoverSchema = {
  * Busca noticias de Ecuador recientes sobre `query`. Nunca lanza: un fallo de
  * Perplexity no debe tumbar el ciclo; devuelve [] y el error va en `error`.
  */
+const NOT_NEWS =
+  /no (se )?(registra|encontr|hay (informaci|evidencia|registro|noticias))|sin (informaci|resultados|noticias)|archivo institucional/i;
+
 export async function discover(
   query: string,
   recency: "hour" | "day" = "day",
@@ -144,7 +147,7 @@ export async function discover(
         {
           role: "system",
           content:
-            "Eres un buscador de noticias para un medio de Ecuador. Devuelve solo noticias reales publicadas por medios o instituciones, con su URL exacta. No inventes URLs. Resúmenes de 1 a 2 oraciones en español, sin opinión.",
+            "Eres un buscador de noticias para un medio de Ecuador. Devuelve solo noticias reales publicadas por medios o instituciones, con su URL exacta. No inventes URLs. Resúmenes de 1 a 2 oraciones en español, sin opinión. Cada resultado debe ser un hecho concreto y nuevo (algo que pasó, se anunció, se aprobó o se denunció). No devuelvas páginas de archivo, listados, portadas, agendas, ni resultados que digan que no se encontró información: si no hay noticias, devuelve una lista vacía.",
         },
         {
           role: "user",
@@ -177,7 +180,9 @@ export async function discover(
           sourceName: String(item.sourceName ?? "").trim() || hostName(url),
         };
       })
-      .filter((item) => item.title && /^https?:\/\//.test(item.url));
+      .filter((item) => item.title && /^https?:\/\//.test(item.url))
+      // Resultados de búsqueda vacíos disfrazados de noticia.
+      .filter((item) => !NOT_NEWS.test(`${item.title} ${item.summary}`));
 
     return { items, error: "" };
   } catch (error) {
