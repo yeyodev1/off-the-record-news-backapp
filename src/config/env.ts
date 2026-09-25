@@ -17,6 +17,12 @@ function optional(key: string, fallback: string): string {
   return process.env[key]?.trim() || fallback;
 }
 
+function bool(key: string, fallback: boolean): boolean {
+  const value = process.env[key]?.trim().toLowerCase();
+  if (!value) return fallback;
+  return value === "true" || value === "1";
+}
+
 function list(key: string): string[] {
   return optional(key, "")
     .split(",")
@@ -42,4 +48,27 @@ export const env = {
   CLOUDINARY_API_KEY: optional("CLOUDINARY_API_KEY", ""),
   CLOUDINARY_API_SECRET: optional("CLOUDINARY_API_SECRET", ""),
   CRON_SECRET: optional("CRON_SECRET", ""),
+  // URL pública del API, para registrar el webhook de Telegram.
+  PUBLIC_API_URL: optional("PUBLIC_API_URL", ""),
+
+  // IA: Claude valora y redacta; Perplexity busca en la web en tiempo real.
+  ANTHROPIC_API_KEY: optional("ANTHROPIC_API_KEY", ""),
+  PERPLEXITY_API_KEY: optional("PERPLEXITY_API_KEY", ""),
+  AI_SCORING_MODEL: optional("AI_SCORING_MODEL", "claude-haiku-4-5-20251001"),
+  AI_WRITING_MODEL: optional("AI_WRITING_MODEL", "claude-sonnet-5"),
+  PERPLEXITY_MODEL: optional("PERPLEXITY_MODEL", "sonar"),
+
+  // Redacción automática
+  PUBLISH_THRESHOLD: Number(optional("PUBLISH_THRESHOLD", "7")),
+  // false = todo lo que pasa el umbral queda en cola de aprobación.
+  AUTO_PUBLISH: bool("AUTO_PUBLISH", false),
+  MAX_DRAFTS_PER_RUN: Number(optional("MAX_DRAFTS_PER_RUN", "3")),
+  // Horario de la mesa (hora de Ecuador, America/Guayaquil).
+  NEWSROOM_START_HOUR: Number(optional("NEWSROOM_START_HOUR", "8")),
+  NEWSROOM_END_HOUR: Number(optional("NEWSROOM_END_HOUR", "17")),
+
+  // Telegram: editores publican, el resto manda denuncias.
+  TELEGRAM_BOT_TOKEN: optional("TELEGRAM_BOT_TOKEN", ""),
+  TELEGRAM_WEBHOOK_SECRET: optional("TELEGRAM_WEBHOOK_SECRET", ""),
+  TELEGRAM_EDITOR_CHAT_IDS: list("TELEGRAM_EDITOR_CHAT_IDS"),
 } as const;
