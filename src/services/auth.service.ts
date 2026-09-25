@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
-import { isConnected } from "../config/mongo";
+import { dbConnect, isConnected } from "../config/mongo";
 import { CustomError } from "../errors/customError.error";
 import { User, IUser } from "../models/user.model";
 
@@ -34,15 +34,17 @@ function signToken(user: any): string {
   );
 }
 
-function requireDb() {
-  if (!isConnected()) throw new CustomError("El servidor no tiene base de datos disponible", 503);
+async function requireDb() {
+  if (!isConnected() && !(await dbConnect())) {
+    throw new CustomError("El servidor no tiene base de datos disponible", 503);
+  }
 }
 
 export async function login(
   email: string,
   password: string,
 ): Promise<{ token: string; user: SessionUser }> {
-  requireDb();
+  await requireDb();
   if (!email || !password) {
     throw new CustomError("Escribe tu correo y tu contraseña", 400);
   }
@@ -61,7 +63,7 @@ export async function login(
 }
 
 export async function findById(id: string): Promise<SessionUser> {
-  requireDb();
+  await requireDb();
   const user = await User.findById(id);
   if (!user) throw new CustomError("Usuario no encontrado", 404);
   return sanitize(user);
@@ -72,7 +74,7 @@ export async function changePassword(
   current: string,
   next: string,
 ): Promise<SessionUser> {
-  requireDb();
+  await requireDb();
   if (next.length < 8) {
     throw new CustomError("La nueva contraseña debe tener al menos 8 caracteres", 400);
   }
@@ -95,7 +97,7 @@ export async function createUser(input: {
   phone?: string;
   accountType?: IUser["accountType"];
 }): Promise<SessionUser> {
-  requireDb();
+  await requireDb();
   const email = input.email.toLowerCase().trim();
   if (!EMAIL.test(email)) throw new CustomError("Correo inválido", 400);
   if (input.password.length < 8) {
