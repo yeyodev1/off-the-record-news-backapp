@@ -11,6 +11,7 @@ import {
 } from "../models/article.model";
 import { Edition } from "../models/subscriber.model";
 import { truncate } from "../utils/text";
+import { chatJson as perplexityJson, isPerplexityConfigured } from "./perplexity.service";
 
 /**
  * Claude es la mesa de redacción: Haiku valora en lote (barato y rápido) y
@@ -43,7 +44,19 @@ function getClient(): Anthropic {
 }
 
 export function isAiConfigured(): boolean {
-  return !!env.ANTHROPIC_API_KEY;
+  return !!env.ANTHROPIC_API_KEY || isPerplexityConfigured();
+}
+
+/**
+ * Si la llave de Claude falla por configuración (sin workspace, inválida), no
+ * tiene sentido reintentarla en cada llamada: se usa Perplexity un rato y se
+ * vuelve a probar Claude después.
+ */
+const CLAUDE_RETRY_MS = 10 * 60 * 1000;
+let claudeDownUntil = 0;
+
+function isConfigError(error: unknown): boolean {
+  return error instanceof CustomError && error.status === 503 && !/saturada/.test(error.message);
 }
 
 const EDITORIAL_SYSTEM = `Eres la mesa de redacción de Off the Record, un medio digital de noticias de Ecuador con el estilo "smart brevity" de Axios.
@@ -74,7 +87,7 @@ Formato de cada nota:
 const SCORING_SYSTEM = `Eres el editor jefe de Off the Record, medio de noticias de Ecuador. Valoras hechos noticiosos para decidir cuáles merecen nota.
 
 Criterios, cada uno de 0 a 10 (enteros o con un decimal):
-- cercania: qué tan cerca está de la audiencia ecuatoriana (10 = pasa en Ecuador y afecta a ecuatorianos; noticias internacionales sin vínculo con Ecuador, 0–3).
+- cercania: qué tan cerca está de la audiencia ecuatoriana (10 = pasa en Ecuador y afecta a ecuatorianos; noticias internacionales sin vínculo con Ecuador, 0–3; moda, farándula y deportes extranjeros sin ecuatorianos, 0–2).
 - inmediatez: qué tan reciente es (10 = ocurrió en las últimas horas; más de 3 días, 0–3).
 - personaje: si involucra a un personaje público relevante (Presidente, ministros, asambleístas, jueces, alcaldes, figuras nacionales).
 - relevancia: interés público; lo que un ciudadano necesita saber.
@@ -235,13 +248,30 @@ export interface Research {
 
 // ——— Llamada base
 
-async function callJson<T>(opts: {
+interface CallOptions {
   model: string;
   system: string;
   prompt: string;
   schema: Record<string, unknown>;
   maxTokens: number;
-}): Promise<T> {
+}
+
+async function callJson<T>(opts: CallOptions): Promise<T> {
+  const claudeUsable = !!env.ANTHROPIC_API_KEY && Date.now() >= claudeDownUntil;
+  if (claudeUsable) {
+    try {
+      return await callClaude<T>(opts);
+    } catch (error) {
+      if (!isConfigError(error) || !isPerplexityConfigured()) throw error;
+      console.warn(`[ia] Claude no disponible (${(error as Error).message}); uso Perplexity`);
+      claudeDownUntil = Date.now() + CLAUDE_RETRY_MS;
+    }
+  }
+  if (!isPerplexityConfigured()) getClient();
+  return perplexityJson<T>(opts);
+}
+
+async function callClaude<T>(opts: CallOptions): Promise<T> {
   const anthropic = getClient();
   // Haiku 4.5 no acepta `effort` ni thinking adaptativo; Sonnet 5 sí y redacta mejor con él.
   const isHaiku = opts.model.includes("haiku");
@@ -302,9 +332,16 @@ async function callJson<T>(opts: {
 
 const clamp = (n: number) => Math.max(0, Math.min(10, Number(n) || 0));
 
-/** Relevancia e impacto pesan el doble que el resto. */
+/**
+ * Relevancia e impacto pesan el doble que el resto. Off the Record es un medio
+ * de Ecuador: lo que no toca al país no puede llegar al umbral de publicación
+ * por más famoso o reciente que sea (moda en Milán, farándula extranjera).
+ */
+const MAX_TOTAL_FAR_FROM_ECUADOR = 6;
+
 export function weightedTotal(s: Omit<ScoreBreakdown, "total" | "reasoning">): number {
-  const total = (s.cercania + s.inmediatez + s.personaje + 2 * s.relevancia + 2 * s.impacto) / 7;
+  let total = (s.cercania + s.inmediatez + s.personaje + 2 * s.relevancia + 2 * s.impacto) / 7;
+  if (s.cercania < 5) total = Math.min(total, MAX_TOTAL_FAR_FROM_ECUADOR);
   return Math.round(total * 10) / 10;
 }
 
