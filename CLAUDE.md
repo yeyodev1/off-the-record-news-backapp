@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- **Dev server:** `pnpm dev` (ts-node-dev con auto-restart, puerto 8100)
+- **Dev server:** `pnpm dev` (ts-node-dev con auto-restart, puerto 8130)
 - **Build:** `pnpm build` (tsc → `dist/`)
 - **Start prod:** `pnpm start`
 - **Format:** `pnpm format` (Prettier)
