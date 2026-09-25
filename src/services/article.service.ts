@@ -208,6 +208,24 @@ export async function enrichSources(
   });
 }
 
+/** Primera foto que encuentre entre las fuentes citadas, con el crédito de ese medio. */
+export async function imageFromSources(sources: ArticleSource[]): Promise<ArticleImage | null> {
+  for (const source of sources.slice(0, 5)) {
+    if (!source.url) continue;
+    const url = await rssService.fetchOgImage(source.url);
+    if (url) {
+      return {
+        url,
+        credit: `Foto: ${source.name}`,
+        sourceName: source.name,
+        sourceUrl: source.url,
+        kind: "photo",
+      };
+    }
+  }
+  return null;
+}
+
 export async function createFromDraft(
   draft: ArticleDraft,
   opts: {
