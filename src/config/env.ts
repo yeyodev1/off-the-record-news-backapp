@@ -1,4 +1,8 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+
+dotenv.config();
+// `vercel env pull` deja el token OIDC del AI Gateway en .env.local (solo en local).
+dotenv.config({ path: ".env.local" });
 
 /**
  * Único lugar que lee process.env. Leerlo en otro archivo a nivel de módulo
@@ -51,7 +55,18 @@ export const env = {
   // URL pública del API, para registrar el webhook de Telegram.
   PUBLIC_API_URL: optional("PUBLIC_API_URL", ""),
 
-  // IA: Claude valora y redacta; Perplexity busca en la web en tiempo real.
+  // Vercel AI Gateway: Jev decide qué es noticia y Claude redacta por el mismo gateway.
+  // Sin API key se usa el token OIDC del proyecto de Vercel.
+  AI_GATEWAY_API_KEY: optional("AI_GATEWAY_API_KEY", ""),
+  HAS_VERCEL_OIDC: Boolean(process.env.VERCEL_OIDC_TOKEN),
+  JEV_MODEL: optional("JEV_MODEL", "typesafe-ai/jev"),
+  GATEWAY_WRITING_MODEL: optional("GATEWAY_WRITING_MODEL", "anthropic/claude-sonnet-5"),
+  GATEWAY_FAST_MODEL: optional("GATEWAY_FAST_MODEL", "anthropic/claude-haiku-4.5"),
+  // Umbral de Jev para considerar que un hecho es de Ecuador o está repetido.
+  JEV_ECUADOR_MIN: Number(optional("JEV_ECUADOR_MIN", "0.5")),
+  JEV_DUPLICATE_MIN: Number(optional("JEV_DUPLICATE_MIN", "0.6")),
+
+  // IA directa (respaldo): Claude con llave propia y Perplexity para buscar en la web.
   ANTHROPIC_API_KEY: optional("ANTHROPIC_API_KEY", ""),
   ANTHROPIC_WORKSPACE_ID: optional("ANTHROPIC_WORKSPACE_ID", ""),
   PERPLEXITY_API_KEY: optional("PERPLEXITY_API_KEY", ""),
