@@ -1,0 +1,181 @@
+import { env } from "../config/env";
+import { CustomError } from "../errors/customError.error";
+
+/**
+ * Perplexity es el reportero con acceso a la web en tiempo real: descubre
+ * noticias que no llegan por RSS y aporta contexto verificable para redactar.
+ */
+
+const ENDPOINT = "https://api.perplexity.ai/chat/completions";
+const TIMEOUT_MS = 45_000;
+
+export interface DiscoveredItem {
+  title: string;
+  url: string;
+  summary: string;
+  publishedAt: Date | null;
+  sourceName: string;
+}
+
+export interface ResearchResult {
+  context: string;
+  citations: string[];
+}
+
+interface PerplexityResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+  citations?: string[];
+  search_results?: Array<{ title?: string; url?: string; date?: string }>;
+}
+
+export function isPerplexityConfigured(): boolean {
+  return !!env.PERPLEXITY_API_KEY;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function chat(body: Record<string, unknown>, attempt = 1): Promise<PerplexityResponse> {
+  if (!env.PERPLEXITY_API_KEY) {
+    throw new CustomError("Perplexity no está configurado (falta PERPLEXITY_API_KEY)", 503);
+  }
+  const response = await fetch(ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.PERPLEXITY_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model: env.PERPLEXITY_MODEL, ...body }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  // El plan tiene un tope de peticiones por minuto: se reintenta con espera creciente.
+  if (response.status === 429 && attempt < 3) {
+    await sleep(2000 * attempt);
+    return chat(body, attempt + 1);
+  }
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).slice(0, 200);
+    throw new CustomError(`Perplexity respondió ${response.status}: ${detail}`, 502);
+  }
+  return (await response.json()) as PerplexityResponse;
+}
+
+function hostName(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function parseDate(value: unknown): Date | null {
+  if (!value || typeof value !== "string") return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  // Perplexity a veces confunde la zona horaria y devuelve fechas "del futuro".
+  return date.getTime() > Date.now() ? new Date() : date;
+}
+
+const discoverSchema = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          url: { type: "string" },
+          summary: { type: "string" },
+          publishedAt: { type: "string" },
+          sourceName: { type: "string" },
+        },
+        required: ["title", "url", "summary", "publishedAt", "sourceName"],
+      },
+    },
+  },
+  required: ["items"],
+};
+
+/**
+ * Busca noticias de Ecuador recientes sobre `query`. Nunca lanza: un fallo de
+ * Perplexity no debe tumbar el ciclo; devuelve [] y el error va en `error`.
+ */
+export async function discover(
+  query: string,
+  recency: "hour" | "day" = "day",
+): Promise<{ items: DiscoveredItem[]; error: string }> {
+  try {
+    const data = await chat({
+      messages: [
+        {
+          role: "system",
+          content:
+            "Eres un buscador de noticias para un medio de Ecuador. Devuelve solo noticias reales publicadas por medios o instituciones, con su URL exacta. No inventes URLs. Resúmenes de 1 a 2 oraciones en español, sin opinión.",
+        },
+        {
+          role: "user",
+          content: `Noticias de Ecuador de las últimas 24 horas sobre: ${query}. Devuelve hasta 6 hechos distintos, cada uno con titular, URL de la nota original, resumen, fecha de publicación (ISO 8601) y nombre del medio.`,
+        },
+      ],
+      search_recency_filter: recency,
+      response_format: { type: "json_schema", json_schema: { schema: discoverSchema } },
+      temperature: 0.1,
+    });
+
+    const content = data.choices?.[0]?.message?.content ?? "";
+    let parsed: { items?: Array<Record<string, unknown>> } = {};
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      // Algunos modelos envuelven el JSON en ```; se rescata lo que haya entre llaves.
+      const match = content.match(/\{[\s\S]*\}/);
+      parsed = match ? JSON.parse(match[0]) : {};
+    }
+
+    const items = (parsed.items ?? [])
+      .map((item) => {
+        const url = String(item.url ?? "").trim();
+        return {
+          title: String(item.title ?? "").trim(),
+          url,
+          summary: String(item.summary ?? "").trim(),
+          publishedAt: parseDate(item.publishedAt),
+          sourceName: String(item.sourceName ?? "").trim() || hostName(url),
+        };
+      })
+      .filter((item) => item.title && /^https?:\/\//.test(item.url));
+
+    return { items, error: "" };
+  } catch (error) {
+    return { items: [], error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** Contexto verificable para enriquecer la redacción. Devuelve null si falla. */
+export async function research(topic: string): Promise<ResearchResult | null> {
+  if (!isPerplexityConfigured()) return null;
+  try {
+    const data = await chat({
+      messages: [
+        {
+          role: "system",
+          content:
+            "Eres un investigador de un medio de Ecuador. Da contexto factual y verificable: antecedentes, cifras oficiales, actores involucrados y próximos pasos conocidos. Sin opinión. Si no hay información confiable sobre algo, no lo menciones. Español.",
+        },
+        {
+          role: "user",
+          content: `Contexto y datos verificados sobre este hecho reciente en Ecuador: ${topic}`,
+        },
+      ],
+      search_recency_filter: "week",
+      temperature: 0.1,
+    });
+    const context = data.choices?.[0]?.message?.content?.trim() ?? "";
+    const citations =
+      data.citations ?? (data.search_results ?? []).map((r) => r.url ?? "").filter(Boolean);
+    return context ? { context, citations: citations.slice(0, 8) } : null;
+  } catch (error) {
+    console.warn("[perplexity] research falló:", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
