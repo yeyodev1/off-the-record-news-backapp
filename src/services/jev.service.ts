@@ -30,6 +30,16 @@ const QUESTIONS: Record<string, JevQuestion> = {
         "opinión, editorial, columna, cartas de lectores, portada o índice de un medio, página de archivo o listado de documentos, texto que dice que no hay información o que algo no ocurrió, horóscopo, publicidad",
     },
   },
+  vigente: {
+    type: "boolean",
+    instructions:
+      "¿El hecho ocurrió o se conoció por primera vez en las últimas 48 horas respecto a hora_actual_ecuador? Juzga por el contenido, no solo por la fecha publicado: si describe un suceso de semanas, meses o años atrás (una masacre, elección o desastre ya conocido), es antiguo aunque la nota tenga fecha de hoy.",
+    criteria: {
+      true: "hecho nuevo de hoy o ayer, o un desarrollo nuevo de hoy o ayer sobre un tema anterior",
+      false:
+        "suceso ocurrido antes de ayer, nota vieja reindexada, recuento, aniversario o resumen de hechos pasados",
+    },
+  },
   duplicado: {
     type: "boolean",
     instructions:
@@ -141,15 +151,16 @@ async function scoreOne(signal: SignalForScoring, headlines: string[]): Promise<
     : "politica";
 
   const noticia = prob(answers.noticia);
+  const vigente = prob(answers.vigente);
   return {
     ref: signal.ref,
     duplicate,
     section,
-    notNews: noticia < 0.5,
+    notNews: noticia < 0.5 || vigente < 0.5,
     score: {
       ...parts,
       total: weightedTotal(parts),
-      reasoning: `Jev: Ecuador ${pct(ecuador)}, hecho noticioso ${pct(noticia)}, repetida ${pct(prob(answers.duplicado))}, sección ${section}.`,
+      reasoning: `Jev: Ecuador ${pct(ecuador)}, hecho noticioso ${pct(noticia)}, reciente ${pct(vigente)}, repetida ${pct(prob(answers.duplicado))}, sección ${section}.`,
     },
   };
 }

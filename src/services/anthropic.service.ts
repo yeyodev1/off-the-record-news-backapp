@@ -89,7 +89,7 @@ const SCORING_SYSTEM = `Eres el editor jefe de Off the Record, medio de noticias
 
 Criterios, cada uno de 0 a 10 (enteros o con un decimal):
 - cercania: qué tan cerca está de la audiencia ecuatoriana (10 = pasa en Ecuador y afecta a ecuatorianos; noticias internacionales sin vínculo con Ecuador, 0–3; moda, farándula y deportes extranjeros sin ecuatorianos, 0–2).
-- inmediatez: qué tan reciente es (10 = ocurrió en las últimas horas; más de 3 días, 0–3).
+- inmediatez: qué tan reciente es el hecho mismo, no la nota (10 = ocurrió en las últimas horas; ayer, 5; más de 2 días, 0–3). Un suceso de meses o años atrás publicado hoy vale 0.
 - personaje: si involucra a un personaje público relevante (Presidente, ministros, asambleístas, jueces, alcaldes, figuras nacionales).
 - relevancia: interés público; lo que un ciudadano necesita saber.
 - impacto: efecto económico o social (bolsillo, empleo, seguridad, servicios, derechos).
@@ -266,7 +266,9 @@ interface CallOptions {
 async function callJson<T>(opts: CallOptions): Promise<T> {
   if (isGatewayConfigured()) {
     try {
-      const model = opts.model.includes("haiku") ? env.GATEWAY_FAST_MODEL : env.GATEWAY_WRITING_MODEL;
+      const model = opts.model.includes("haiku")
+        ? env.GATEWAY_FAST_MODEL
+        : env.GATEWAY_WRITING_MODEL;
       return await gatewayJson<T>({ ...opts, model });
     } catch (error) {
       console.warn(`[ia] AI Gateway falló (${(error as Error).message}); pruebo el respaldo`);
@@ -460,7 +462,10 @@ function uniqueSources(sources: ArticleSource[]): ArticleSource[] {
     .map((s) => ({ name: s.name.trim(), url: s.url.trim() }))
     .filter((s) => {
       if (!s.name) return false;
-      const key = (s.url || s.name).toLowerCase().replace(/[?#].*$/, "").replace(/\/$/, "");
+      const key = (s.url || s.name)
+        .toLowerCase()
+        .replace(/[?#].*$/, "")
+        .replace(/\/$/, "");
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

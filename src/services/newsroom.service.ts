@@ -31,6 +31,8 @@ const PERPLEXITY_CONCURRENCY = 2;
 const COLLECT_BUDGET_MS = 90_000;
 const RSS_ITEMS_PER_FEED = 15;
 const MAX_ITEM_AGE_MS = 48 * 3600_000;
+// Inmediatez 5 = "ayer" en la escala 0–10: lo más viejo que se redacta.
+const MIN_INMEDIATEZ = 5;
 const SCORE_BATCH_SIZE = 20;
 const MAX_TO_SCORE = 80;
 
@@ -73,10 +75,7 @@ async function collectFromSource(
     let items: Collected[] = [];
     if (source.kind === "rss") {
       const feed = await rssService.fetchFeed(source.url, RSS_ITEMS_PER_FEED);
-      const cutoff = Date.now() - MAX_ITEM_AGE_MS;
-      items = feed
-        .filter((i) => !i.publishedAt || i.publishedAt.getTime() >= cutoff)
-        .map((i) => ({ ...base, ...i, sourceName: source.name }));
+      items = feed.map((i) => ({ ...base, ...i, sourceName: source.name }));
     } else if (source.kind === "perplexity") {
       const { items: found, error } = await perplexityService.discover(source.query || source.name);
       if (error) throw new Error(error);
@@ -88,13 +87,25 @@ async function collectFromSource(
       }));
     }
     await Source.updateOne({ _id: source._id }, { lastCheckedAt: new Date(), lastError: "" });
-    return items;
+    return items.filter(isRecent);
   } catch (error) {
     const message = errorMessage(error).slice(0, 300);
     errors.push(`Fuente "${source.name}": ${message}`);
     await Source.updateOne({ _id: source._id }, { lastCheckedAt: new Date(), lastError: message });
     return [];
   }
+}
+
+/**
+ * Descarta notas viejas: por la fecha de publicación y, como la búsqueda a veces
+ * trae notas de hace años con fecha de hoy, por el año que traiga la URL.
+ */
+function isRecent(item: { url: string; publishedAt: Date | null }): boolean {
+  if (item.publishedAt && item.publishedAt.getTime() < Date.now() - MAX_ITEM_AGE_MS) return false;
+  const years = item.url.match(/(?<!\d)20\d{2}(?!\d)/g) ?? [];
+  const currentYear = new Date().getFullYear();
+  // Enero todavía publica notas fechadas en diciembre.
+  return !years.some((y) => Number(y) < currentYear - (new Date().getMonth() === 0 ? 1 : 0));
 }
 
 /** Guarda solo las señales que no existen (por URL normalizada o por título). */
@@ -175,7 +186,13 @@ async function scorePending(signals: any[], errors: string[]): Promise<number> {
             { _id: r.ref },
             {
               score: r.score,
-              status: r.notNews ? "discarded" : r.duplicate ? "duplicate" : "scored",
+              // Un hecho de días atrás no es noticia del día aunque la nota sea nueva.
+              status:
+                r.notNews || r.score.inmediatez < MIN_INMEDIATEZ
+                  ? "discarded"
+                  : r.duplicate
+                    ? "duplicate"
+                    : "scored",
             },
           ),
         ),

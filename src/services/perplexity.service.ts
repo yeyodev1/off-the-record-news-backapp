@@ -105,8 +105,26 @@ function parseDate(value: unknown): Date | null {
   if (!value || typeof value !== "string") return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  // Perplexity a veces confunde la zona horaria y devuelve fechas "del futuro".
-  return date.getTime() > Date.now() ? new Date() : date;
+  // Perplexity a veces confunde la zona horaria y devuelve fechas "del futuro";
+  // unas horas se toleran, más que eso es una fecha inventada.
+  const ahead = date.getTime() - Date.now();
+  if (ahead > 24 * 3600_000) return null;
+  return ahead > 0 ? new Date() : date;
+}
+
+function urlKey(url: string): string {
+  return url
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?/, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/$/, "");
+}
+
+function todayInEcuador(): string {
+  return new Date().toLocaleDateString("es-EC", {
+    timeZone: "America/Guayaquil",
+    dateStyle: "full",
+  });
 }
 
 const discoverSchema = {
@@ -147,11 +165,11 @@ export async function discover(
         {
           role: "system",
           content:
-            "Eres un buscador de noticias para un medio de Ecuador. Devuelve solo noticias reales publicadas por medios o instituciones, con su URL exacta. No inventes URLs. Resúmenes de 1 a 2 oraciones en español, sin opinión. Cada resultado debe ser un hecho concreto y nuevo (algo que pasó, se anunció, se aprobó o se denunció). No devuelvas páginas de archivo, listados, portadas, agendas, ni resultados que digan que no se encontró información: si no hay noticias, devuelve una lista vacía.",
+            "Eres un buscador de noticias para un medio de Ecuador. Devuelve solo noticias reales publicadas por medios o instituciones, con su URL exacta. No inventes URLs ni fechas: la fecha es la de publicación que muestra la nota. Resúmenes de 1 a 2 oraciones en español, sin opinión. Cada resultado debe ser un hecho concreto y nuevo (algo que pasó, se anunció, se aprobó o se denunció) en las últimas 24 horas. No devuelvas hechos de semanas, meses o años anteriores aunque la página aparezca en la búsqueda, ni páginas de archivo, listados, portadas, agendas, ni resultados que digan que no se encontró información: si no hay noticias, devuelve una lista vacía.",
         },
         {
           role: "user",
-          content: `Noticias de Ecuador de las últimas 24 horas sobre: ${query}. Devuelve hasta 6 hechos distintos, cada uno con titular, URL de la nota original, resumen, fecha de publicación (ISO 8601) y nombre del medio.`,
+          content: `Hoy es ${todayInEcuador()}. Noticias de Ecuador de las últimas 24 horas sobre: ${query}. Devuelve hasta 6 hechos distintos, cada uno con titular, URL de la nota original, resumen, fecha de publicación (ISO 8601) y nombre del medio.`,
         },
       ],
       search_recency_filter: recency,
@@ -169,6 +187,13 @@ export async function discover(
       parsed = match ? JSON.parse(match[0]) : {};
     }
 
+    // La fecha de los resultados de búsqueda viene del índice, no del modelo: manda sobre la suya.
+    const indexedDates = new Map(
+      (data.search_results ?? [])
+        .filter((r) => r.url && r.date)
+        .map((r) => [urlKey(r.url!), parseDate(r.date)]),
+    );
+
     const items = (parsed.items ?? [])
       .map((item) => {
         const url = String(item.url ?? "").trim();
@@ -176,7 +201,7 @@ export async function discover(
           title: String(item.title ?? "").trim(),
           url,
           summary: String(item.summary ?? "").trim(),
-          publishedAt: parseDate(item.publishedAt),
+          publishedAt: indexedDates.get(urlKey(url)) ?? parseDate(item.publishedAt),
           sourceName: String(item.sourceName ?? "").trim() || hostName(url),
         };
       })
