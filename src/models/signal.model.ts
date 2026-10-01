@@ -1,6 +1,6 @@
 import mongoose, { Schema, Types } from "mongoose";
 import { applyToJSON } from "../utils/toJSON";
-import { ScoreBreakdown, scoreSchema } from "./article.model";
+import { ScoreBreakdown, scoreSchema, Section, SECTIONS } from "./article.model";
 
 export const SIGNAL_STATUSES = ["new", "scored", "discarded", "drafted", "duplicate"] as const;
 export type SignalStatus = (typeof SIGNAL_STATUSES)[number];
@@ -16,6 +16,12 @@ export interface ISignal {
   status: SignalStatus;
   score: ScoreBreakdown | null;
   articleId: Types.ObjectId | null;
+  storyId: Types.ObjectId | null;
+  /** Acusa a una persona o empresa nombrada: exige corroboración antes de redactar. */
+  accusation: boolean;
+  /** Familia vetada: el hecho queda bloqueado hasta que un humano lo levante. */
+  familyVeto: boolean;
+  section: Section | null;
   // Hash de URL normalizada: evita guardar dos veces la misma nota.
   hash: string;
   // Hash del título normalizado: atrapa la misma nota con URL distinta.
@@ -36,6 +42,10 @@ const signalSchema = new Schema<ISignal>(
     status: { type: String, enum: SIGNAL_STATUSES, default: "new" },
     score: { type: scoreSchema, default: null },
     articleId: { type: Schema.Types.ObjectId, ref: "Article", default: null },
+    storyId: { type: Schema.Types.ObjectId, ref: "Story", default: null, index: true },
+    accusation: { type: Boolean, default: false },
+    familyVeto: { type: Boolean, default: false },
+    section: { type: String, enum: [...SECTIONS, null], default: null },
     hash: { type: String, required: true, unique: true },
     titleHash: { type: String, default: "", index: true },
   },

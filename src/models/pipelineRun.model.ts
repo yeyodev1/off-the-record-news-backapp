@@ -9,6 +9,8 @@ export interface IPipelineRun {
   signalsNew: number;
   scored: number;
   drafted: number;
+  clustered: number;
+  updates: number;
   skippedReason: string;
   errors: string[];
   createdAt?: Date;
@@ -24,6 +26,8 @@ const pipelineRunSchema = new Schema<IPipelineRun>(
     signalsNew: { type: Number, default: 0 },
     scored: { type: Number, default: 0 },
     drafted: { type: Number, default: 0 },
+    clustered: { type: Number, default: 0 },
+    updates: { type: Number, default: 0 },
     skippedReason: { type: String, default: "" },
     errors: { type: [String], default: [] },
   },

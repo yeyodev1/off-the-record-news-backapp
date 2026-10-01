@@ -23,12 +23,28 @@ router.delete("/articles/:id", articleController.remove);
 router.post("/articles/:id/publish", articleController.publish);
 router.post("/articles/:id/reject", articleController.reject);
 router.post("/articles/:id/rewrite", articleController.rewrite);
+router.post("/articles/:id/retract", articleController.retract);
+router.post("/articles/:id/wait", articleController.wait);
+router.post("/articles/:id/updates/:updateId/publish", articleController.publishUpdate);
+router.post("/articles/:id/updates/:updateId/reject", articleController.rejectUpdate);
 router.post("/articles/:id/image", uploadMiddleware.single("image"), articleController.uploadImage);
 
 // Señales
 router.get("/signals", adminController.listSignals);
 router.post("/signals/:id/draft", adminController.draftSignal);
 router.post("/signals/:id/discard", adminController.discardSignal);
+
+// Hechos
+router.get("/stories", adminController.listStories);
+router.get("/stories/:id", adminController.getStory);
+router.post("/stories/:id/draft", adminController.draftStory);
+router.post("/stories/:id/discard", adminController.discardStory);
+
+// Telegram
+router.get("/telegram", adminController.telegramTeam);
+router.post("/telegram/configure", adminController.configureTelegram);
+router.put("/telegram/members/:id", adminController.setTelegramRole);
+router.delete("/telegram/members/:id", adminController.removeTelegramMember);
 
 // Fuentes
 router.get("/sources", adminController.listSources);

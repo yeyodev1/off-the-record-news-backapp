@@ -81,12 +81,23 @@ export const env = {
   // false = todo lo que pasa el umbral queda en cola de aprobación.
   AUTO_PUBLISH: bool("AUTO_PUBLISH", false),
   MAX_DRAFTS_PER_RUN: Number(optional("MAX_DRAFTS_PER_RUN", "3")),
+  // Hechos entre este puntaje y el umbral quedan en observación hasta que lleguen más fuentes.
+  WATCHLIST_MIN: Number(optional("WATCHLIST_MIN", "5")),
+  // Nivel N1: las actualizaciones sin errores de verificación salen solas.
+  AUTO_PUBLISH_UPDATES: bool("AUTO_PUBLISH_UPDATES", false),
+  MAX_UPDATES_PER_RUN: Number(optional("MAX_UPDATES_PER_RUN", "2")),
   // Horario de la mesa (hora de Ecuador, America/Guayaquil).
   NEWSROOM_START_HOUR: Number(optional("NEWSROOM_START_HOUR", "8")),
   NEWSROOM_END_HOUR: Number(optional("NEWSROOM_END_HOUR", "17")),
 
-  // Telegram: editores publican, el resto manda denuncias.
+  // Telegram: editores aprueban y publican, reporteros mandan notas a la Mesa,
+  // el resto manda denuncias por chat privado.
   TELEGRAM_BOT_TOKEN: optional("TELEGRAM_BOT_TOKEN", ""),
   TELEGRAM_WEBHOOK_SECRET: optional("TELEGRAM_WEBHOOK_SECRET", ""),
-  TELEGRAM_EDITOR_CHAT_IDS: list("TELEGRAM_EDITOR_CHAT_IDS"),
+  // Grupo "Mesa": ahí llegan las notas por aprobar con sus botones.
+  TELEGRAM_MESA_CHAT_ID: optional("TELEGRAM_MESA_CHAT_ID", ""),
+  // Ids de usuario de Telegram. TELEGRAM_EDITOR_CHAT_IDS se mantiene por compatibilidad:
+  // en un chat privado el id del chat es el del usuario.
+  TELEGRAM_EDITOR_IDS: [...list("TELEGRAM_EDITOR_IDS"), ...list("TELEGRAM_EDITOR_CHAT_IDS")],
+  TELEGRAM_REPORTER_IDS: list("TELEGRAM_REPORTER_IDS"),
 } as const;

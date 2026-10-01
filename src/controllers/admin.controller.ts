@@ -6,6 +6,8 @@ import * as newsletterService from "../services/newsletter.service";
 import * as newsroomService from "../services/newsroom.service";
 import * as signalService from "../services/signal.service";
 import * as sourceService from "../services/source.service";
+import * as storyService from "../services/story.service";
+import * as telegramService from "../services/telegram.service";
 
 const q = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -49,6 +51,91 @@ export async function draftSignal(req: Request, res: Response, next: NextFunctio
 export async function discardSignal(req: Request, res: Response, next: NextFunction) {
   try {
     res.status(200).json(await signalService.discard(String(req.params.id)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ——— Hechos
+
+/** GET /api/admin/stories?status=&page= */
+export async function listStories(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(
+      await storyService.list({
+        status: q(req.query.status),
+        page: req.query.page,
+        limit: req.query.limit,
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** GET /api/admin/stories/:id — el hecho con sus señales. */
+export async function getStory(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await storyService.signalsOf(String(req.params.id)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/stories/:id/draft */
+export async function draftStory(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(201).json(await newsroomService.draftStoryById(String(req.params.id)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/stories/:id/discard */
+export async function discardStory(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await storyService.discard(String(req.params.id)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ——— Telegram
+
+/** GET /api/admin/telegram — bot, webhook, grupo Mesa y equipo. */
+export async function telegramTeam(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await telegramService.team());
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** PUT /api/admin/telegram/members/:id — body: { role } */
+export async function setTelegramRole(req: Request, res: Response, next: NextFunction) {
+  try {
+    res
+      .status(200)
+      .json(await telegramService.setMemberRole(String(req.params.id), req.body?.role));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** DELETE /api/admin/telegram/members/:id */
+export async function removeTelegramMember(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await telegramService.removeMember(String(req.params.id)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/telegram/configure — webhook, descripción y comandos. */
+export async function configureTelegram(_req: Request, res: Response, next: NextFunction) {
+  try {
+    await telegramService.configureBot();
+    res.status(200).json(await telegramService.team());
   } catch (error) {
     next(error);
   }

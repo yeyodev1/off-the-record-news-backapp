@@ -1,39 +1,17 @@
 /**
- * Registra el webhook del bot de Telegram en PUBLIC_API_URL + /api/telegram/webhook.
- * Uso: pnpm telegram:webhook
+ * Deja el bot listo: webhook en PUBLIC_API_URL + /api/telegram/webhook, nombre,
+ * descripción y comandos. No toca la base. Uso: pnpm telegram:webhook
  */
 import "dotenv/config";
-import { env } from "../config/env";
-import { callApi } from "../services/telegram.service";
+import { configureBot } from "../services/telegram.service";
 
-async function main() {
-  if (!env.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN no está definido en .env");
-  if (!env.TELEGRAM_WEBHOOK_SECRET)
-    throw new Error("TELEGRAM_WEBHOOK_SECRET no está definido en .env");
-  if (!/^https:\/\//.test(env.PUBLIC_API_URL))
-    throw new Error("PUBLIC_API_URL debe ser una URL https pública");
-
-  const url = `${env.PUBLIC_API_URL.replace(/\/+$/, "")}/api/telegram/webhook`;
-  await callApi("setWebhook", {
-    url,
-    secret_token: env.TELEGRAM_WEBHOOK_SECRET,
-    allowed_updates: ["message", "channel_post"],
-    drop_pending_updates: true,
+configureBot()
+  .then((state) => {
+    console.log(`✔ Bot @${state.bot?.username} listo`);
+    console.log(`  Webhook: ${state.webhook?.url}`);
+    if (state.webhook?.lastError) console.log(`  Último error de Telegram: ${state.webhook.lastError}`);
+  })
+  .catch((error) => {
+    console.error("✖ No se pudo configurar el bot:", error instanceof Error ? error.message : error);
+    process.exit(1);
   });
-  const info = await callApi<{
-    url: string;
-    pending_update_count: number;
-    last_error_message?: string;
-  }>("getWebhookInfo", {});
-  console.log(`✔ Webhook registrado: ${info.url}`);
-  if (info.last_error_message)
-    console.log(`  Último error de Telegram: ${info.last_error_message}`);
-}
-
-main().catch((error) => {
-  console.error(
-    "✖ No se pudo registrar el webhook:",
-    error instanceof Error ? error.message : error,
-  );
-  process.exit(1);
-});

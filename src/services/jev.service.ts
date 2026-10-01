@@ -40,6 +40,24 @@ const QUESTIONS: Record<string, JevQuestion> = {
         "suceso ocurrido antes de ayer, nota vieja reindexada, recuento, aniversario o resumen de hechos pasados",
     },
   },
+  acusacion: {
+    type: "boolean",
+    instructions:
+      "¿El hecho acusa a una persona o empresa nombrada de un delito, corrupción o una irregularidad?",
+    criteria: {
+      true: "señala a alguien con nombre como responsable o sospechoso: denuncia, allanamiento, detención, investigación, sanción",
+      false: "no acusa a nadie con nombre, o la acusación es contra una institución en abstracto",
+    },
+  },
+  familia: {
+    type: "boolean",
+    instructions:
+      "¿El hecho trata sobre un familiar (madre, padre, hijos, pareja, hermanos, primos, tíos) del presidente de Ecuador, de un expresidente o de los alcaldes de Quito o Guayaquil?",
+    criteria: {
+      true: "el foco es el familiar o una denuncia que lo toca, y el familiar no es quien ejecutó el acto",
+      false: "no involucra familiares de esas autoridades, o el familiar es el actor directo del hecho (firmó, decidió, contrató)",
+    },
+  },
   duplicado: {
     type: "boolean",
     instructions:
@@ -157,10 +175,12 @@ async function scoreOne(signal: SignalForScoring, headlines: string[]): Promise<
     duplicate,
     section,
     notNews: noticia < 0.5 || vigente < 0.5,
+    accusation: prob(answers.acusacion) >= 0.5,
+    familyVeto: prob(answers.familia) >= 0.5,
     score: {
       ...parts,
       total: weightedTotal(parts),
-      reasoning: `Jev: Ecuador ${pct(ecuador)}, hecho noticioso ${pct(noticia)}, reciente ${pct(vigente)}, repetida ${pct(prob(answers.duplicado))}, sección ${section}.`,
+      reasoning: `Jev: Ecuador ${pct(ecuador)}, hecho noticioso ${pct(noticia)}, reciente ${pct(vigente)}, repetida ${pct(prob(answers.duplicado))}, acusación ${pct(prob(answers.acusacion))}, sección ${section}.`,
     },
   };
 }
@@ -215,4 +235,68 @@ export async function isSameStory(
     },
   );
   return prob(answers.mismo) >= env.JEV_DUPLICATE_MIN;
+}
+
+/**
+ * ¿A cuál de los hechos abiertos pertenece esta pieza? Devuelve el ref del hecho
+ * o null si es un acontecimiento nuevo. Una sola pregunta de opción: Jev ve todos
+ * los candidatos a la vez y no hay que preguntarle uno por uno.
+ */
+export async function matchStory(
+  candidate: { title: string; summary: string },
+  stories: { ref: string; title: string }[],
+): Promise<string | null> {
+  if (!stories.length) return null;
+  const NONE = "ninguno";
+  const criteria: Record<string, string> = {};
+  for (const s of stories) criteria[s.ref] = truncate(s.title, 160);
+  criteria[NONE] = "acontecimiento distinto de todos los anteriores";
+  const answers = await evaluate(
+    { pieza: truncate(candidate.title, 200), resumen: truncate(candidate.summary, 400) },
+    {
+      hecho: {
+        type: "choice",
+        instructions:
+          "¿La pieza cuenta el mismo acontecimiento que alguno de estos hechos? Mismo suceso contado por otro medio o un desarrollo directo de ese suceso. Un tema parecido no basta.",
+        criteria,
+      },
+    },
+  );
+  const answer = answers.hecho;
+  if (answer?.type !== "choice" || answer.choice === NONE) return null;
+  const confidence = answer.probabilities?.[answer.choice] ?? 0;
+  return confidence >= env.JEV_DUPLICATE_MIN && criteria[answer.choice] ? answer.choice : null;
+}
+
+/** Filtro barato antes de pedirle a Claude un bloque de actualización. */
+export async function bringsNewFacts(
+  article: { title: string; lede: string; keyPoints: string[]; updates: string[] },
+  piece: { title: string; summary: string; sourceName: string },
+): Promise<boolean> {
+  const answers = await evaluate(
+    {
+      nota_publicada: {
+        titular: article.title,
+        entrada: article.lede,
+        detalles: article.keyPoints,
+        actualizaciones: article.updates,
+      },
+      pieza_nueva: {
+        titular: truncate(piece.title, 200),
+        resumen: truncate(piece.summary, 600),
+        medio: piece.sourceName,
+      },
+    },
+    {
+      nuevo: {
+        type: "boolean",
+        instructions: "¿La pieza nueva trae un dato o desarrollo que la nota publicada todavía no cuenta?",
+        criteria: {
+          true: "respuesta del aludido, cifra oficial, decisión, detención, votación u otro hecho posterior",
+          false: "repite lo que la nota ya dice con otras palabras",
+        },
+      },
+    },
+  );
+  return prob(answers.nuevo) >= 0.6;
 }

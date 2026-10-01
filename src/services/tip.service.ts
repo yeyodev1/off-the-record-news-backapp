@@ -3,6 +3,7 @@ import { CustomError } from "../errors/customError.error";
 import { Tip, TIP_STATUSES, TipStatus } from "../models/tip.model";
 import { paginate } from "../utils/paginate";
 import * as anthropicService from "./anthropic.service";
+import * as verifierService from "./verifier.service";
 import * as articleService from "./article.service";
 
 export async function createWebTip(body: Record<string, unknown>) {
@@ -55,13 +56,15 @@ export async function updateStatus(id: string, status: unknown) {
   return tip.toJSON();
 }
 
-export async function draftFromTip(id: string) {
+export async function draftFromTip(id: string, by = "") {
   const tip = await getDoc(id);
   const context = `Denuncia ciudadana recibida por ${tip.channel === "telegram" ? "Telegram" : "la web"}. Trátala como información por verificar: atribúyela a "una denuncia recibida por Off the Record" y no la presentes como hecho confirmado.\n\n${tip.text}`;
   const draft = await anthropicService.articleFromText(context);
   const article = await articleService.createFromDraft(draft, {
     origin: "manual",
     status: "pending",
+    evidence: verifierService.buildEvidence([tip.text]),
+    by,
   });
   if (tip.mediaUrls[0]) {
     article.image = {

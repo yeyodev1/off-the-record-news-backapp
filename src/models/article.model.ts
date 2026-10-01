@@ -24,7 +24,8 @@ export const SECTION_NAMES: Record<Section, string> = {
   tecnologia: "Tecnología",
 };
 
-export const ARTICLE_STATUSES = ["pending", "published", "rejected"] as const;
+// `retracted`: estuvo publicada y se retiró; la URL queda con el aviso de retiro.
+export const ARTICLE_STATUSES = ["pending", "published", "rejected", "retracted"] as const;
 export type ArticleStatus = (typeof ARTICLE_STATUSES)[number];
 
 export const ARTICLE_ORIGINS = ["ai", "telegram", "manual"] as const;
@@ -63,6 +64,63 @@ export interface ArticleSource {
   summary?: string;
 }
 
+export const FLAG_LEVELS = ["error", "aviso"] as const;
+
+export interface VerificationFlag {
+  level: (typeof FLAG_LEVELS)[number];
+  kind: string;
+  text: string;
+}
+
+export interface Verification {
+  checkedAt: Date;
+  errors: number;
+  warnings: number;
+  flags: VerificationFlag[];
+}
+
+/** El corpus con el que se redactó: lo único que la nota puede afirmar. */
+export interface Evidence {
+  text: string;
+  urls: string[];
+}
+
+export const UPDATE_STATUSES = ["pending", "published", "rejected"] as const;
+export type UpdateStatus = (typeof UPDATE_STATUSES)[number];
+
+export interface ArticleUpdate {
+  _id?: Types.ObjectId;
+  text: string;
+  sources: ArticleSource[];
+  status: UpdateStatus;
+  verification: Verification | null;
+  evidence: string;
+  signalId: Types.ObjectId | null;
+  createdAt: Date;
+  publishedAt: Date | null;
+}
+
+export interface Retraction {
+  at: Date;
+  by: string;
+  reason: string;
+}
+
+export interface HistoryEntry {
+  action: string;
+  by: string;
+  at: Date;
+  note: string;
+}
+
+/** Mensaje de Telegram ligado a la nota, para reconocer respuestas y editar botones. */
+export interface TelegramCard {
+  chatId: string;
+  messageId: number;
+  kind: "nota" | "update" | "regen";
+  updateId: string;
+}
+
 export interface IArticle {
   slug: string;
   title: string;
@@ -87,6 +145,15 @@ export interface IArticle {
   views: number;
   publishedAt: Date | null;
   signalId: Types.ObjectId | null;
+  storyId: Types.ObjectId | null;
+  verification: Verification | null;
+  evidence: Evidence | null;
+  updates: ArticleUpdate[];
+  lastUpdatedAt: Date | null;
+  reviewedBy: string;
+  retraction: Retraction | null;
+  history: HistoryEntry[];
+  telegramCards: TelegramCard[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -124,6 +191,37 @@ const infographicSchema = new Schema<Infographic>(
   { _id: false },
 );
 
+const verificationSchema = new Schema<Verification>(
+  {
+    checkedAt: { type: Date, default: () => new Date() },
+    errors: { type: Number, default: 0 },
+    warnings: { type: Number, default: 0 },
+    flags: [
+      {
+        _id: false,
+        level: { type: String, enum: FLAG_LEVELS, default: "aviso" },
+        kind: String,
+        text: String,
+      },
+    ],
+  },
+  { _id: false, suppressReservedKeysWarning: true },
+);
+
+const sourceSchema = { _id: false, name: String, url: String, summary: { type: String, default: "" } };
+
+const updateSchema = new Schema<ArticleUpdate>({
+  text: { type: String, required: true },
+  sources: { type: [sourceSchema], default: [] },
+  status: { type: String, enum: UPDATE_STATUSES, default: "pending" },
+  verification: { type: verificationSchema, default: null },
+  evidence: { type: String, default: "" },
+  signalId: { type: Schema.Types.ObjectId, ref: "Signal", default: null },
+  createdAt: { type: Date, default: () => new Date() },
+  publishedAt: { type: Date, default: null },
+});
+applyToJSON(updateSchema, ["evidence"]);
+
 const articleSchema = new Schema<IArticle>(
   {
     slug: { type: String, required: true, unique: true, index: true },
@@ -138,10 +236,7 @@ const articleSchema = new Schema<IArticle>(
     tags: { type: [String], default: [] },
     image: { type: imageSchema, default: null },
     infographic: { type: infographicSchema, default: null },
-    sources: {
-      type: [{ _id: false, name: String, url: String, summary: { type: String, default: "" } }],
-      default: [],
-    },
+    sources: { type: [sourceSchema], default: [] },
     score: { type: scoreSchema, default: null },
     status: { type: String, enum: ARTICLE_STATUSES, default: "pending" },
     origin: { type: String, enum: ARTICLE_ORIGINS, default: "ai" },
@@ -152,6 +247,37 @@ const articleSchema = new Schema<IArticle>(
     views: { type: Number, default: 0 },
     publishedAt: { type: Date, default: null },
     signalId: { type: Schema.Types.ObjectId, ref: "Signal", default: null },
+    storyId: { type: Schema.Types.ObjectId, ref: "Story", default: null, index: true },
+    verification: { type: verificationSchema, default: null },
+    // El corpus pesa; solo se trae cuando hay que verificar.
+    evidence: {
+      type: new Schema<Evidence>({ text: String, urls: [String] }, { _id: false }),
+      default: null,
+      select: false,
+    },
+    updates: { type: [updateSchema], default: [] },
+    lastUpdatedAt: { type: Date, default: null },
+    reviewedBy: { type: String, default: "" },
+    retraction: {
+      type: new Schema<Retraction>({ at: Date, by: String, reason: String }, { _id: false }),
+      default: null,
+    },
+    history: {
+      type: [{ _id: false, action: String, by: String, at: Date, note: String }],
+      default: [],
+    },
+    telegramCards: {
+      type: [
+        {
+          _id: false,
+          chatId: String,
+          messageId: Number,
+          kind: { type: String, enum: ["nota", "update", "regen"] },
+          updateId: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true },
 );
@@ -159,6 +285,7 @@ const articleSchema = new Schema<IArticle>(
 articleSchema.index({ status: 1, publishedAt: -1 });
 articleSchema.index({ section: 1, status: 1, publishedAt: -1 });
 articleSchema.index({ tags: 1 });
+articleSchema.index({ "telegramCards.chatId": 1, "telegramCards.messageId": 1 });
 
 // ~200 palabras por minuto; nunca menos de 1.
 articleSchema.pre("save", function (next) {
@@ -175,7 +302,7 @@ articleSchema.pre("save", function (next) {
   next();
 });
 
-applyToJSON(articleSchema, ["signalId"]);
+applyToJSON(articleSchema, ["signalId", "telegramCards", "evidence"]);
 
 export const Article =
   mongoose.models.Article || mongoose.model<IArticle>("Article", articleSchema);

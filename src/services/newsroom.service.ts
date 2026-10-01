@@ -5,20 +5,32 @@ import { Article, ArticleImage, ArticleSource } from "../models/article.model";
 import { PipelineRun } from "../models/pipelineRun.model";
 import { Signal } from "../models/signal.model";
 import { Source } from "../models/source.model";
+import { Story } from "../models/story.model";
 import { paginate } from "../utils/paginate";
-import { errorMessage, mapLimit, normalizeTitle, normalizeUrl, sha1 } from "../utils/text";
+import {
+  errorMessage,
+  mapLimit,
+  normalizeTitle,
+  normalizeUrl,
+  sha1,
+  titleSimilarity,
+} from "../utils/text";
 import * as anthropicService from "./anthropic.service";
 import * as gatewayService from "./gateway.service";
 import * as jevService from "./jev.service";
 import * as articleService from "./article.service";
 import * as perplexityService from "./perplexity.service";
 import * as rssService from "./rss.service";
+import * as storyService from "./story.service";
+import * as telegramService from "./telegram.service";
+import * as verifierService from "./verifier.service";
 
 /**
  * El editor general. Cada ciclo: recoge señales de las fuentes, descarta lo
- * repetido, valora en lote con Haiku, y lo que pasa el umbral lo investiga con
- * Perplexity y lo redacta con Sonnet. Todo cabe en ~250 s porque Vercel corta
- * a los 300: cada fase revisa el reloj antes de empezar.
+ * repetido, valora en lote, agrupa las señales en hechos, redacta los hechos
+ * que pasan el umbral y propone actualizaciones a las notas ya publicadas.
+ * Todo cabe en ~250 s porque Vercel corta a los 300: cada fase revisa el reloj
+ * antes de empezar.
  */
 
 const CYCLE_BUDGET_MS = 240_000;
@@ -35,6 +47,13 @@ const MAX_ITEM_AGE_MS = 48 * 3600_000;
 const MIN_INMEDIATEZ = 5;
 const SCORE_BATCH_SIZE = 20;
 const MAX_TO_SCORE = 80;
+const MAX_TO_CLUSTER = 80;
+const CLUSTER_BUDGET_MS = 45_000;
+// Un bloque de actualización es una llamada corta; sin este margen se deja para el próximo ciclo.
+const UPDATE_MIN_REMAINING_MS = 40_000;
+// Piezas por hecho que ve el redactor: las mejor valoradas.
+const MAX_SIGNALS_PER_DRAFT = 6;
+const SIMILAR_TITLE = 0.45;
 
 interface Collected {
   sourceId: Types.ObjectId;
@@ -186,13 +205,13 @@ async function scorePending(signals: any[], errors: string[]): Promise<number> {
             { _id: r.ref },
             {
               score: r.score,
+              accusation: !!r.accusation,
+              familyVeto: !!r.familyVeto,
+              section: r.section,
               // Un hecho de días atrás no es noticia del día aunque la nota sea nueva.
-              status:
-                r.notNews || r.score.inmediatez < MIN_INMEDIATEZ
-                  ? "discarded"
-                  : r.duplicate
-                    ? "duplicate"
-                    : "scored",
+              // Lo repetido no se descarta: el agrupador lo une a su hecho y puede
+              // volverse una actualización.
+              status: r.notNews || r.score.inmediatez < MIN_INMEDIATEZ ? "discarded" : "scored",
             },
           ),
         ),
@@ -206,22 +225,8 @@ async function scorePending(signals: any[], errors: string[]): Promise<number> {
   return counts.reduce((a, b) => a + b, 0);
 }
 
-function wordSet(title: string): Set<string> {
-  return new Set(
-    normalizeTitle(title)
-      .split(" ")
-      .filter((w) => w.length > 3),
-  );
-}
-
-/** Parecido de titulares (Jaccard). Evita redactar dos notas del mismo hecho. */
-function similar(a: string, b: string): boolean {
-  const wa = wordSet(a);
-  const wb = wordSet(b);
-  if (!wa.size || !wb.size) return false;
-  const inter = [...wa].filter((w) => wb.has(w)).length;
-  return inter / (wa.size + wb.size - inter) >= 0.45;
-}
+/** Evita redactar dos notas del mismo hecho cuando el agrupador no los unió. */
+const similar = (a: string, b: string) => titleSimilarity(a, b) >= SIMILAR_TITLE;
 
 async function imageForSignal(
   signal: any,
@@ -253,31 +258,46 @@ function oneAtATime<T>(task: () => Promise<T>): Promise<T> {
   return next;
 }
 
+function toInput(signal: any): anthropicService.SignalInput {
+  return {
+    title: signal.title,
+    summary: signal.summary,
+    url: signal.url,
+    sourceName: signal.sourceName,
+    publishedAt: signal.publishedAt,
+  };
+}
+
 /**
- * Investiga y redacta una señal. Lanza si la IA falla. Con `dedupe`, Jev compara
- * el titular ya redactado con lo publicado y descarta la nota si es el mismo hecho
- * (el titular crudo de cada medio casi nunca coincide; el redactado sí se parece).
+ * Investiga y redacta un hecho con todas sus piezas. Lanza si la IA falla. Con
+ * `dedupe`, Jev compara el titular ya redactado con lo publicado y descarta la
+ * nota si es el mismo hecho (el titular crudo de cada medio casi nunca coincide;
+ * el redactado sí se parece).
  */
-export async function draftSignal(signal: any, { dedupe = false } = {}) {
+export async function draftStory(story: any, { dedupe = false } = {}) {
+  const signals: any[] = await Signal.find({ storyId: story._id })
+    .sort({ "score.total": -1, createdAt: 1 })
+    .limit(MAX_SIGNALS_PER_DRAFT);
+  if (!signals.length) throw new CustomError("El hecho no tiene señales", 409);
+  const primary = signals[0];
+  const inputs = signals.map(toInput);
+
   const research = await perplexityService.research(
-    `${signal.title}. ${signal.summary}`.slice(0, 800),
+    `${primary.title}. ${primary.summary}`.slice(0, 800),
   );
-  const draft = await anthropicService.writeArticle(
-    {
-      title: signal.title,
-      summary: signal.summary,
-      url: signal.url,
-      sourceName: signal.sourceName,
-      publishedAt: signal.publishedAt,
-    },
-    research,
+  const draft = await anthropicService.writeArticle(inputs, research);
+  // El corpus es exactamente lo que vio el redactor: contra eso se verifica.
+  const evidence = verifierService.buildEvidence(
+    [anthropicService.signalsBlock(inputs), anthropicService.researchBlock(research)],
+    [...signals.map((s) => s.url), ...(research?.citations ?? [])],
   );
-  const image = await imageForSignal(signal, draft.sources);
+  const image = await imageForSignal(primary, draft.sources);
   // Fuera de la fila: leer las páginas de las fuentes es lo lento. Si el medio
-  // original bloquea la lectura, su resumen del RSS sirve de respaldo.
-  draft.sources = await articleService.enrichSources(draft.sources, {
-    [signal.url]: signal.summary ?? "",
-  });
+  // bloquea la lectura, su resumen del RSS sirve de respaldo.
+  draft.sources = await articleService.enrichSources(
+    draft.sources,
+    Object.fromEntries(signals.map((s) => [s.url, s.summary ?? ""])),
+  );
   return oneAtATime(async () => {
     if (dedupe && gatewayService.isGatewayConfigured()) {
       const headlines = await recentHeadlines();
@@ -286,28 +306,117 @@ export async function draftSignal(signal: any, { dedupe = false } = {}) {
         headlines,
       );
       if (same) {
-        signal.status = "duplicate";
-        await signal.save();
+        await discardAsRepeated(story);
         return null;
       }
     }
-    return saveDraft(signal, draft, image);
+    return saveDraft(story, signals, draft, image, evidence);
   });
 }
 
-async function saveDraft(signal: any, draft: any, image: ArticleImage | null) {
+async function discardAsRepeated(story: any) {
+  story.status = "discarded";
+  story.reason = "Repetido con una nota ya publicada";
+  await story.save();
+  await Signal.updateMany({ storyId: story._id, status: "scored" }, { status: "duplicate" });
+}
+
+async function saveDraft(
+  story: any,
+  signals: any[],
+  draft: anthropicService.ArticleDraft,
+  image: ArticleImage | null,
+  evidence: ReturnType<typeof verifierService.buildEvidence>,
+) {
+  const primary = signals[0];
+  const baseScore = story.bestScore?.toObject?.() ?? story.bestScore ?? primary.score ?? null;
   const article = await articleService.createFromDraft(draft, {
     origin: "ai",
-    status: env.AUTO_PUBLISH ? "published" : "pending",
-    score: signal.score ?? null,
+    // Con AUTO_PUBLISH solo sale sola si el verificador no encontró errores.
+    publishIfClean: env.AUTO_PUBLISH,
+    score: baseScore ? { ...baseScore, total: story.score } : null,
     image,
-    signalId: signal._id,
+    signalId: primary._id,
+    storyId: story._id,
+    evidence,
   });
-  signal.status = "drafted";
-  signal.articleId = article._id;
-  if (!signal.imageUrl && image) signal.imageUrl = image.url;
-  await signal.save();
+  await Signal.updateMany(
+    { _id: { $in: signals.map((s) => s._id) } },
+    { status: "drafted", articleId: article._id },
+  );
+  if (!primary.imageUrl && image) await Signal.updateOne({ _id: primary._id }, { imageUrl: image.url });
+  story.articleId = article._id;
+  story.status = "covered";
+  story.reason = article.status === "published" ? "Publicada" : "Nota por aprobar";
+  await story.save();
+  if (article.status === "pending") await telegramService.notifyArticle(article);
   return article;
+}
+
+/**
+ * Lo nuevo sobre una nota publicada se vuelve un bloque "Actualización HH:MM"
+ * en la misma URL. Una por nota y por ciclo, y nunca dos pendientes a la vez:
+ * la Mesa revisa una antes de que llegue la siguiente.
+ */
+async function proposeUpdates(
+  attachments: storyService.Attachment[],
+  errors: string[],
+  deadline: number,
+): Promise<number> {
+  const latestByArticle = new Map<string, storyService.Attachment>();
+  for (const a of attachments) latestByArticle.set(String(a.story.articleId), a);
+
+  let proposed = 0;
+  for (const { signal, story } of latestByArticle.values()) {
+    if (proposed >= env.MAX_UPDATES_PER_RUN) break;
+    if (deadline - Date.now() < UPDATE_MIN_REMAINING_MS) {
+      errors.push("Sin tiempo para proponer actualizaciones; quedan para el próximo ciclo");
+      break;
+    }
+    const article: any = await Article.findById(story.articleId);
+    if (!article || article.status !== "published") continue;
+    if (article.updates.some((u: any) => u.status === "pending")) continue;
+    const cited = new Set(article.sources.map((s: ArticleSource) => normalizeUrl(s.url || "")));
+    if (signal.url && cited.has(normalizeUrl(signal.url))) continue;
+
+    const known = {
+      title: article.title,
+      lede: article.lede,
+      keyPoints: article.keyPoints,
+      body: article.body,
+      updates: article.updates
+        .filter((u: any) => u.status !== "rejected")
+        .map((u: any) => u.text),
+    };
+    try {
+      if (gatewayService.isGatewayConfigured() && !(await jevService.bringsNewFacts(known, signal))) {
+        signal.status = "duplicate";
+        await signal.save();
+        continue;
+      }
+      const input = toInput(signal);
+      const { nuevo, texto } = await anthropicService.writeUpdate(known, input);
+      if (!nuevo) {
+        signal.status = "duplicate";
+        await signal.save();
+        continue;
+      }
+      const update = await articleService.addUpdate(article, {
+        text: texto,
+        sources: [{ name: signal.sourceName, url: signal.url, summary: signal.summary ?? "" }],
+        evidence: verifierService.buildEvidence([anthropicService.signalsBlock([input])], [signal.url]),
+        signalId: signal._id,
+      });
+      signal.status = "drafted";
+      signal.articleId = article._id;
+      await signal.save();
+      if (update.status === "pending") await telegramService.notifyUpdate(article, update);
+      proposed++;
+    } catch (error) {
+      errors.push(`Actualización de "${article.title}": ${errorMessage(error)}`);
+    }
+  }
+  return proposed;
 }
 
 export async function runCycle({
@@ -374,56 +483,72 @@ export async function runCycle({
     errors.push("Sin tiempo para valorar en este ciclo");
   }
 
-  // 4. Redacción de las mejores
-  const weights = new Map(sources.map((s: any) => [String(s._id), s.weight ?? 1]));
-  const candidates = await Signal.find({
+  // 4. Agrupación en hechos
+  await storyService.ensureStoriesForRecentArticles();
+  const toCluster = await Signal.find({
     status: "scored",
-    "score.total": { $gte: env.PUBLISH_THRESHOLD },
-    createdAt: { $gte: new Date(Date.now() - 24 * 3600_000) },
+    storyId: null,
+    createdAt: { $gte: new Date(Date.now() - MAX_ITEM_AGE_MS) },
   })
     .sort({ "score.total": -1 })
+    .limit(MAX_TO_CLUSTER);
+  const { clustered, attachments } = await storyService.clusterSignals(toCluster, {
+    deadline: Math.min(Date.now() + CLUSTER_BUDGET_MS, deadline - DRAFT_MIN_REMAINING_MS),
+    errors,
+  });
+  run.clustered = clustered;
+  await run.save();
+
+  // 5. Redacción de los hechos listos
+  const weights = new Map(sources.map((s: any) => [s.name, s.weight ?? 1]));
+  const weightOf = (story: any) =>
+    Math.max(1, ...story.sourceNames.map((n: string) => weights.get(n) ?? 1));
+  const candidates = await Story.find({
+    status: "ready",
+    articleId: null,
+    lastSignalAt: { $gte: new Date(Date.now() - 24 * 3600_000) },
+  })
+    .sort({ score: -1 })
     .limit(30);
 
   const headlines = await recentHeadlines();
   const picked: any[] = [];
-  const ranked = candidates.sort(
-    (a: any, b: any) =>
-      b.score.total * (weights.get(String(b.sourceId)) ?? 1) -
-      a.score.total * (weights.get(String(a.sourceId)) ?? 1),
-  );
-  for (const c of ranked) {
+  const ranked = candidates.sort((a: any, b: any) => b.score * weightOf(b) - a.score * weightOf(a));
+  for (const story of ranked) {
     if (picked.length >= env.MAX_DRAFTS_PER_RUN) break;
     const others = [...headlines, ...picked.map((p) => p.title)];
-    let clash = others.some((t) => similar(t, c.title));
+    let clash = others.some((t) => similar(t, story.title));
     if (!clash && gatewayService.isGatewayConfigured()) {
-      clash = await jevService.isSameStory(c, others).catch((error) => {
+      clash = await jevService.isSameStory(story, others).catch((error) => {
         errors.push(`Jev (repetidas): ${errorMessage(error)}`);
         return false;
       });
     }
     if (clash) {
-      c.status = "duplicate";
-      await c.save();
+      await discardAsRepeated(story);
       continue;
     }
-    picked.push(c);
+    picked.push(story);
   }
 
-  const results = await mapLimit(picked, 3, async (signal) => {
+  const results = await mapLimit(picked, 3, async (story) => {
     if (deadline - Date.now() < DRAFT_MIN_REMAINING_MS) {
-      errors.push(`Sin tiempo para redactar "${signal.title}"; queda para el próximo ciclo`);
+      errors.push(`Sin tiempo para redactar "${story.title}"; queda para el próximo ciclo`);
       return false;
     }
     try {
-      const article = await draftSignal(signal, { dedupe: true });
-      if (!article) errors.push(`Descartada por repetida tras redactar: "${signal.title}"`);
+      const article = await draftStory(story, { dedupe: true });
+      if (!article) errors.push(`Descartada por repetida tras redactar: "${story.title}"`);
       return Boolean(article);
     } catch (error) {
-      errors.push(`Redacción "${signal.title}": ${errorMessage(error)}`);
+      errors.push(`Redacción "${story.title}": ${errorMessage(error)}`);
       return false;
     }
   });
   run.drafted = results.filter(Boolean).length;
+
+  // 6. Actualizaciones de notas publicadas
+  run.updates = await proposeUpdates(attachments, errors, deadline);
 
   return finish();
 }
@@ -443,14 +568,29 @@ export async function lastRun() {
   return run ? run.toJSON() : null;
 }
 
+/** Redacción a pedido desde el panel: la señal se redacta con todo su hecho. */
 export async function draftSignalById(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new CustomError("Señal no encontrada", 404);
-  const signal = await Signal.findById(id);
+  const signal: any = await Signal.findById(id);
   if (!signal) throw new CustomError("Señal no encontrada", 404);
   if (signal.articleId) {
     const existing = await Article.findById(signal.articleId);
     if (existing) throw new CustomError("Esta señal ya tiene una nota redactada", 409);
   }
-  const article = await draftSignal(signal);
+  if (!signal.storyId) {
+    await storyService.clusterSignals([signal], { deadline: Date.now() + 60_000, errors: [] });
+  }
+  return draftStoryById(String(signal.storyId));
+}
+
+export async function draftStoryById(id: string) {
+  if (!Types.ObjectId.isValid(id)) throw new CustomError("Hecho no encontrado", 404);
+  const story: any = await Story.findById(id);
+  if (!story) throw new CustomError("Hecho no encontrado", 404);
+  if (story.articleId && (await Article.exists({ _id: story.articleId }))) {
+    throw new CustomError("Este hecho ya tiene una nota redactada", 409);
+  }
+  const article = await draftStory(story);
+  if (!article) throw new CustomError("El hecho ya estaba cubierto por otra nota", 409);
   return article.toJSON();
 }

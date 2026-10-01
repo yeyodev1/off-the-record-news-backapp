@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as articleService from "../services/article.service";
+import { AuthRequest } from "../types/AuthRequest";
+import { actorName } from "../utils/actor";
 
 const q = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -67,46 +69,46 @@ export async function adminGet(req: Request, res: Response, next: NextFunction) 
 }
 
 /** POST /api/admin/articles */
-export async function create(req: Request, res: Response, next: NextFunction) {
+export async function create(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    res.status(201).json(await articleService.createManual(req.body ?? {}));
+    res.status(201).json(await articleService.createManual(req.body ?? {}, await actorName(req)));
   } catch (error) {
     next(error);
   }
 }
 
 /** PUT /api/admin/articles/:id */
-export async function update(req: Request, res: Response, next: NextFunction) {
+export async function update(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    res.status(200).json(await articleService.update(String(req.params.id), req.body ?? {}));
+    res.status(200).json(await articleService.update(String(req.params.id), req.body ?? {}, await actorName(req)));
   } catch (error) {
     next(error);
   }
 }
 
 /** POST /api/admin/articles/:id/publish */
-export async function publish(req: Request, res: Response, next: NextFunction) {
+export async function publish(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    res.status(200).json(await articleService.publish(String(req.params.id)));
+    res.status(200).json(await articleService.publish(String(req.params.id), await actorName(req)));
   } catch (error) {
     next(error);
   }
 }
 
 /** POST /api/admin/articles/:id/reject */
-export async function reject(req: Request, res: Response, next: NextFunction) {
+export async function reject(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    res.status(200).json(await articleService.reject(String(req.params.id)));
+    res.status(200).json(await articleService.reject(String(req.params.id), await actorName(req)));
   } catch (error) {
     next(error);
   }
 }
 
 /** POST /api/admin/articles/:id/rewrite — body: { instructions } */
-export async function rewrite(req: Request, res: Response, next: NextFunction) {
+export async function rewrite(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const instructions = String(req.body?.instructions ?? "");
-    res.status(200).json(await articleService.rewrite(String(req.params.id), instructions));
+    res.status(200).json(await articleService.rewrite(String(req.params.id), instructions, await actorName(req)));
   } catch (error) {
     next(error);
   }
@@ -132,12 +134,73 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
 }
 
 /** POST /api/admin/articles/from-text — body: { text, sourceUrl? } */
-export async function fromText(req: Request, res: Response, next: NextFunction) {
+export async function fromText(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { text, sourceUrl } = req.body ?? {};
     res
       .status(201)
-      .json(await articleService.fromText(String(text ?? ""), String(sourceUrl ?? "")));
+      .json(
+        await articleService.fromText(
+          String(text ?? ""),
+          String(sourceUrl ?? ""),
+          await actorName(req),
+        ),
+      );
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/articles/:id/retract — body: { reason? }. Kill switch. */
+export async function retract(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const reason = String(req.body?.reason ?? "");
+    res
+      .status(200)
+      .json(await articleService.retract(String(req.params.id), await actorName(req), reason));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/articles/:id/wait — el hecho vuelve a esperar más fuentes. */
+export async function wait(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await articleService.wait(String(req.params.id), await actorName(req)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/articles/:id/updates/:updateId/publish */
+export async function publishUpdate(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    res
+      .status(200)
+      .json(
+        await articleService.publishUpdate(
+          String(req.params.id),
+          String(req.params.updateId),
+          await actorName(req),
+        ),
+      );
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/articles/:id/updates/:updateId/reject */
+export async function rejectUpdate(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    res
+      .status(200)
+      .json(
+        await articleService.rejectUpdate(
+          String(req.params.id),
+          String(req.params.updateId),
+          await actorName(req),
+        ),
+      );
   } catch (error) {
     next(error);
   }

@@ -70,6 +70,30 @@ Reglas editoriales, sin excepción:
 - Las citas textuales solo si aparecen literalmente en la fuente, con atribución.
 - Atribuye los hechos a su fuente ("según Primicias", "informó la Presidencia").
 - Prioriza lo que le importa a una persona en Ecuador: su bolsillo, su seguridad, sus derechos, quién decide.
+- Voz de Boscán y La Moni en plural cuando hables como medio ("leímos", "vimos"). Frases cortas; la lapidaria después de la larga; las cifras traducidas a algo que se entienda. Léxico ecuatoriano real.
+
+Línea editorial (ley de contenido):
+1. Sin banderas políticas: ni a favor ni en contra del Gobierno. La conclusión la pone el lector.
+2. Ningún político es leyenda: nadie, vivo o muerto, es héroe, mártir, prócer ni villano. Hechos, cargos, fechas, consecuencias.
+3. Cero camioneta: sin linchamientos, sin catalogar a nadie de bueno o malo, sin sumarse a la indignación del día.
+4. Equilibrio de orillas: si el tema es político y el material trae versiones de ambos lados, cuéntalas con el medio nombrado (oficialistas de referencia: Radiocentro, La Posta; opositores: Radio Pichincha, Expreso; correístas: Ecuadorinmediato, Pichincha Comunicaciones). Sin arbitrar.
+5. La familia es territorio vetado: cero cobertura de familiares (madre, padre, hijos, parejas, hermanos, primos, tíos) del presidente, de los expresidentes y de los alcaldes de Quito y Guayaquil. Única excepción: el familiar que es el actor directo del hecho (firmó el contrato) se cubre por su acto, sin extender el foco a la familia.
+6. Presunción de inocencia: "presunto", "según la Fiscalía", estado procesal explícito. Si falta la versión del aludido, dilo.
+7. Humor solo hacia arriba. Opinión etiquetada o ausente.
+8. Fechas exactas: la fecha de cada pieza es la única verdad temporal. Nunca deduzcas el día de la semana ("el martes") ni "ayer" si la fuente no lo dice.
+
+Reglas de redacción (ley de forma, adaptada de "Signs of AI writing"):
+- Prohibido el guion largo (— o –) en cualquier forma: usa punto, coma, dos puntos o paréntesis.
+- Prohibido el paralelismo negativo y toda su familia: "no es X, es Y", "no es X, sino Y", "no solo X, sino también Y", "más que X, Y", "lejos de X", ni partido en dos frases ("No fue un error. Fue una decisión."). Di lo que es.
+- Prohibido inflar el legado o la importancia: "marca un hito", "histórico", "sin precedentes", "punto de inflexión", "un antes y un después".
+- Prohibido el gerundio analítico colgado al final ("…, evidenciando la crisis", "…, reflejando el malestar").
+- Prohibida la atribución vaga: "expertos señalan", "analistas creen", "muchos consideran", "se dice que". Nombra quién o no lo digas.
+- Prohibido el vocabulario de IA: "cabe destacar", "es importante señalar", "en el marco de", "en un contexto de", "panorama" (fuera de la sección), "abordar", "fomentar", "potenciar", "crucial", "fundamental", "sinergia", "ecosistema", "navegar", "desafíos".
+- Prohibidos los rodeos del verbo ser: "se erige como", "se posiciona como", "constituye", "representa un". Usa "es".
+- Prohibidas las muletillas y cierres de ensayo: "en resumen", "en conclusión", "en definitiva", "sin duda", "queda claro que", "solo el tiempo dirá", y las aperturas de humo ("En un mundo donde…").
+- Prohibida la regla de tres decorativa (tres adjetivos o sustantivos en fila por ritmo), el hedging doble ("podría eventualmente") y el tono de comunicado ("reafirma su compromiso", "en aras de").
+- Sin negrillas ni mayúsculas de título.
+- Cada cifra, nombre y enlace tiene que estar escrito en el material. Un verificador automático lo comprueba.
 
 Formato de cada nota:
 - title: titular directo, máximo 70 caracteres, sin punto final.
@@ -97,6 +121,8 @@ Criterios, cada uno de 0 a 10 (enteros o con un decimal):
 Sé exigente: farándula, deportes sin impacto, sucesos aislados, notas de servicio y publicidad puntúan bajo en relevancia e impacto.
 reasoning: una sola oración en español explicando la valoración.
 duplicate: true si el hecho ya está cubierto por alguno de los titulares recientes que se te dan (mismo hecho, aunque cambie la redacción). Si dos o más hechos de la lista son el mismo, marca duplicate:true en todos menos en el más completo.
+accusation: true si el hecho acusa a una persona o empresa nombrada de un delito o una irregularidad.
+familyVeto: true si el hecho trata sobre un familiar (madre, padre, hijos, pareja, hermanos, primos, tíos) del presidente, de un expresidente o de los alcaldes de Quito o Guayaquil, salvo que ese familiar sea el actor directo del hecho (por ejemplo, firmó el contrato).
 section: la sección que mejor le corresponde.`;
 
 // ——— Esquemas JSON (structured outputs exige additionalProperties:false y todo requerido)
@@ -182,6 +208,8 @@ const scoresSchema = {
           impacto: { type: "number" },
           reasoning: { type: "string" },
           duplicate: { type: "boolean" },
+          accusation: { type: "boolean" },
+          familyVeto: { type: "boolean" },
           section: { type: "string", enum: [...SECTIONS] },
         },
         required: [
@@ -193,6 +221,8 @@ const scoresSchema = {
           "impacto",
           "reasoning",
           "duplicate",
+          "accusation",
+          "familyVeto",
           "section",
         ],
         additionalProperties: false,
@@ -227,6 +257,10 @@ export interface SignalScore {
   section: Section;
   /** Opinión, cartas, portadas: no es un hecho que se pueda reportar. */
   notNews?: boolean;
+  /** Acusa a alguien con nombre: el hecho necesita corroboración antes de redactarse. */
+  accusation?: boolean;
+  /** Familia vetada (presidente, expresidentes, alcaldes de Quito y Guayaquil): solo un humano lo levanta. */
+  familyVeto?: boolean;
 }
 
 export interface ArticleDraft {
@@ -403,6 +437,8 @@ ${list}`;
       impacto: number;
       reasoning: string;
       duplicate: boolean;
+      accusation: boolean;
+      familyVeto: boolean;
       section: Section;
     }>;
   }>({
@@ -427,6 +463,8 @@ ${list}`;
       return {
         ref: r.ref,
         duplicate: !!r.duplicate,
+        accusation: !!r.accusation,
+        familyVeto: !!r.familyVeto,
         section: SECTIONS.includes(r.section) ? r.section : "politica",
         score: { ...parts, total: weightedTotal(parts), reasoning: r.reasoning },
       };
@@ -484,33 +522,97 @@ async function draftFrom(prompt: string): Promise<ArticleDraft> {
   return cleanDraft(draft);
 }
 
+export interface SignalInput {
+  title: string;
+  summary: string;
+  url: string;
+  sourceName: string;
+  publishedAt: Date | null;
+}
+
+export function formatDate(date: Date | null): string {
+  if (!date) return "sin fecha";
+  return date.toLocaleString("es-EC", { timeZone: "America/Guayaquil", dateStyle: "long", timeStyle: "short" });
+}
+
+/** Las piezas de un hecho tal como las ve el redactor. También son el corpus del verificador. */
+export function signalsBlock(signals: SignalInput[]): string {
+  return signals
+    .map(
+      (s, i) => `Pieza ${i + 1}
+Medio: ${s.sourceName}
+URL: ${s.url}
+Fecha: ${formatDate(s.publishedAt)}
+Titular: ${s.title}
+Resumen: ${s.summary}`,
+    )
+    .join("\n\n");
+}
+
+export function researchBlock(research: Research | null): string {
+  if (!research?.context) return "";
+  return `Investigación adicional (búsqueda web en tiempo real):
+${truncate(research.context, 6000)}
+
+Fuentes de la investigación:
+${research.citations.map((c) => `- ${c}`).join("\n")}`;
+}
+
+/** Redacta un hecho a partir de todas sus piezas: varios medios cuentan más que uno. */
 export async function writeArticle(
-  signal: {
-    title: string;
-    summary: string;
-    url: string;
-    sourceName: string;
-    publishedAt: Date | null;
-  },
+  signals: SignalInput[],
   research: Research | null,
 ): Promise<ArticleDraft> {
-  const researchBlock = research?.context
-    ? `\n\nInvestigación adicional (búsqueda web en tiempo real):\n${truncate(research.context, 6000)}\n\nFuentes de la investigación:\n${research.citations.map((c) => `- ${c}`).join("\n")}`
-    : "";
-
+  const extra = researchBlock(research);
   const prompt = `Fecha y hora actual en Ecuador: ${nowInEcuador()}.
 
-Redacta una nota smart brevity sobre este hecho. Usa solo la información de abajo.
+Redacta una nota smart brevity sobre este hecho. Usa solo la información de abajo. ${signals.length > 1 ? `Son ${signals.length} piezas de medios distintos sobre el mismo hecho: cruza lo que dicen y atribuye cada dato a su medio.` : ""}
 
-Fuente original: ${signal.sourceName}
-URL: ${signal.url}
-Fecha: ${signal.publishedAt ? signal.publishedAt.toISOString() : "sin fecha"}
-Titular original: ${signal.title}
-Resumen: ${signal.summary}${researchBlock}
+${signalsBlock(signals)}${extra ? `\n\n${extra}` : ""}
 
-Incluye en sources al medio original (${signal.sourceName}, ${signal.url}) y las fuentes de la investigación que hayas usado.`;
+Incluye en sources a los medios de arriba que hayas usado, con su URL exacta${extra ? ", y las fuentes de la investigación que hayas usado" : ""}. No escribas URLs que no aparezcan arriba.`;
 
   return draftFrom(prompt);
+}
+
+const updateSchema = {
+  type: "object",
+  properties: { nuevo: { type: "boolean" }, texto: { type: "string" } },
+  required: ["nuevo", "texto"],
+  additionalProperties: false,
+};
+
+/**
+ * Bloque "Actualización HH:MM" de una nota publicada. Solo con lo que trae la
+ * pieza nueva; si no aporta nada que la nota no tenga, `nuevo` va en false.
+ */
+export async function writeUpdate(
+  article: { title: string; lede: string; keyPoints: string[]; body: string[]; updates: string[] },
+  signal: SignalInput,
+): Promise<{ nuevo: boolean; texto: string }> {
+  const prompt = `Fecha y hora actual en Ecuador: ${nowInEcuador()}.
+
+Esta nota ya está publicada:
+Titular: ${article.title}
+Entrada: ${article.lede}
+Detalles: ${article.keyPoints.join(" | ")}
+Cuerpo: ${truncate(article.body.join(" "), 3000)}
+Actualizaciones previas: ${article.updates.length ? article.updates.join(" | ") : "(ninguna)"}
+
+Llegó esta pieza nueva sobre el mismo hecho:
+${signalsBlock([signal])}
+
+Si la pieza aporta un dato nuevo y verificable que la nota no tiene (una respuesta del aludido, una cifra oficial, una decisión, un desarrollo), escribe en "texto" el bloque de actualización: de 1 a 3 oraciones, atribuido al medio ("según ${signal.sourceName}"), solo con lo que dice la pieza. No repitas lo que la nota ya cuenta y no empieces con "Actualización".
+Si no aporta nada nuevo, "nuevo" va en false y "texto" vacío.`;
+
+  const result = await callJson<{ nuevo: boolean; texto: string }>({
+    model: env.AI_WRITING_MODEL,
+    system: EDITORIAL_SYSTEM,
+    prompt,
+    schema: updateSchema,
+    maxTokens: 4000,
+  });
+  return { nuevo: !!result.nuevo && !!result.texto.trim(), texto: result.texto.trim() };
 }
 
 export async function rewriteArticle(

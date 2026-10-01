@@ -90,3 +90,20 @@ export async function mapLimit<T, R>(
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+function wordSet(title: string): Set<string> {
+  return new Set(
+    normalizeTitle(title)
+      .split(" ")
+      .filter((w) => w.length > 3),
+  );
+}
+
+/** Parecido de titulares (Jaccard sobre palabras de más de 3 letras), de 0 a 1. */
+export function titleSimilarity(a: string, b: string): number {
+  const wa = wordSet(a);
+  const wb = wordSet(b);
+  if (!wa.size || !wb.size) return 0;
+  const inter = [...wa].filter((w) => wb.has(w)).length;
+  return inter / (wa.size + wb.size - inter);
+}

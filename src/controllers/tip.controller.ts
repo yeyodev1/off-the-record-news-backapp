@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from "express";
+import { AuthRequest } from "../types/AuthRequest";
+import { actorName } from "../utils/actor";
 import * as tipService from "../services/tip.service";
 
 /** POST /api/tips — body: { name?, contact?, text } */
@@ -37,7 +39,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
 /** POST /api/admin/tips/:id/draft */
 export async function draft(req: Request, res: Response, next: NextFunction) {
   try {
-    res.status(201).json(await tipService.draftFromTip(String(req.params.id)));
+    res.status(201).json(await tipService.draftFromTip(String(req.params.id), await actorName(req as AuthRequest)));
   } catch (error) {
     next(error);
   }
