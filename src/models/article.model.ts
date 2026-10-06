@@ -1,5 +1,6 @@
 import mongoose, { Schema, Types } from "mongoose";
 import { applyToJSON } from "../utils/toJSON";
+import { Lens, ModeRelevance, READING_MODES, Stance, STANCES } from "../config/modes";
 
 export const SECTIONS = [
   "politica",
@@ -62,6 +63,8 @@ export interface ArticleSource {
   url: string;
   /** Lo que dice esa nota, tomado de su propia descripción: se lee sin entrar. */
   summary?: string;
+  /** Postura de esa pieza en este hecho ("Lo que dicen las partes"). "" = sin valorar. */
+  stance?: Stance | "";
 }
 
 export const FLAG_LEVELS = ["error", "aviso"] as const;
@@ -154,6 +157,15 @@ export interface IArticle {
   retraction: Retraction | null;
   history: HistoryEntry[];
   telegramCards: TelegramCard[];
+  /** Lectura del hecho por orillas; de aquí sale la relevancia por modo. */
+  lens: Lens | null;
+  /** Relevancia vigente por modo (0–100). La Mesa puede corregirla. */
+  modeRelevance: ModeRelevance | null;
+  /** Lo que propuso el sistema: con la corrección forma el par del golden set. */
+  modeRelevanceAuto: ModeRelevance | null;
+  modeRelevanceEditedBy: string;
+  /** Vistas agregadas por modo, anónimas: sin IP ni nada del lector. */
+  viewsByMode: Partial<ModeRelevance>;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -208,7 +220,31 @@ const verificationSchema = new Schema<Verification>(
   { _id: false, suppressReservedKeysWarning: true },
 );
 
-const sourceSchema = { _id: false, name: String, url: String, summary: { type: String, default: "" } };
+const sourceSchema = {
+  _id: false,
+  name: String,
+  url: String,
+  summary: { type: String, default: "" },
+  stance: { type: String, enum: [...STANCES, ""], default: "" },
+};
+
+const modeNumbers = Object.fromEntries(READING_MODES.map((m) => [m, { type: Number, default: 0 }]));
+const modeRelevanceSchema = new Schema<ModeRelevance>(modeNumbers, { _id: false });
+
+const lensSchema = new Schema<Lens>(
+  {
+    oficialismo: { type: Number, default: 0 },
+    correismo: { type: Number, default: 0 },
+    oposicion: { type: Number, default: 0 },
+    institucional: { type: Number, default: 0 },
+    solidez: { type: Number, enum: [1, 2, 3], default: 1 },
+    documentosPrimarios: { type: Boolean, default: false },
+    contradiccion: { type: Boolean, default: false },
+    nota: { type: String, default: "" },
+    assessedAt: { type: Date, default: () => new Date() },
+  },
+  { _id: false },
+);
 
 const updateSchema = new Schema<ArticleUpdate>({
   text: { type: String, required: true },
@@ -278,6 +314,11 @@ const articleSchema = new Schema<IArticle>(
       ],
       default: [],
     },
+    lens: { type: lensSchema, default: null },
+    modeRelevance: { type: modeRelevanceSchema, default: null },
+    modeRelevanceAuto: { type: modeRelevanceSchema, default: null },
+    modeRelevanceEditedBy: { type: String, default: "" },
+    viewsByMode: { type: new Schema(modeNumbers, { _id: false }), default: () => ({}) },
   },
   { timestamps: true },
 );

@@ -7,6 +7,7 @@ import subscriberRoutes from "./subscriber.routes";
 import tipRoutes from "./tip.routes";
 import telegramRoutes from "./telegram.routes";
 import adminRoutes from "./admin.routes";
+import metricsRoutes from "./metrics.routes";
 
 function routerApi(app: Application) {
   const router = express.Router();
@@ -19,6 +20,7 @@ function routerApi(app: Application) {
   router.use("/subscribers", subscriberRoutes);
   router.use("/tips", tipRoutes);
   router.use("/telegram", telegramRoutes);
+  router.use("/metrics", metricsRoutes);
   router.use("/admin", adminRoutes);
 }
 

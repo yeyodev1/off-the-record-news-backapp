@@ -52,6 +52,8 @@ export const env = {
   CLOUDINARY_API_KEY: optional("CLOUDINARY_API_KEY", ""),
   CLOUDINARY_API_SECRET: optional("CLOUDINARY_API_SECRET", ""),
   CRON_SECRET: optional("CRON_SECRET", ""),
+  // Cifra el modo de lectura de los suscriptores que consintieron. Sin valor se deriva de JWT_SECRET.
+  MODE_ENCRYPTION_KEY: optional("MODE_ENCRYPTION_KEY", ""),
   // URL pública del API, para registrar el webhook de Telegram.
   PUBLIC_API_URL: optional("PUBLIC_API_URL", ""),
 

@@ -297,7 +297,7 @@ interface CallOptions {
  * Orden de preferencia: Claude por el Vercel AI Gateway (sin llave de proveedor
  * que mantener), Claude con llave directa y, si nada de eso responde, Perplexity.
  */
-async function callJson<T>(opts: CallOptions): Promise<T> {
+export async function callJson<T>(opts: CallOptions): Promise<T> {
   if (isGatewayConfigured()) {
     try {
       const model = opts.model.includes("haiku")

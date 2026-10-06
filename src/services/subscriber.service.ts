@@ -4,6 +4,8 @@ import { Edition, EDITIONS, Plan, PLANS, Subscriber } from "../models/subscriber
 import { escapeRegex, paginate } from "../utils/paginate";
 import { escapeHtml } from "../utils/text";
 import { unsubscribeUrl } from "../utils/links";
+import { parseMode, ReadingMode } from "../config/modes";
+import { seal, unseal } from "../utils/sealed";
 import { layout, sendEmail } from "./email.service";
 
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -66,10 +68,12 @@ export async function register(body: Record<string, unknown>) {
     .trim()
     .slice(0, 160);
 
+  const modeFields = modePreference(body);
+
   let sub = await Subscriber.findOne({ email });
   if (sub && sub.status === "active") {
     // No se degrada a una cuenta pagada: solo se actualizan preferencias.
-    sub.set({ editions, ...(name ? { name } : {}), ...(company ? { company } : {}) });
+    sub.set({ editions, ...modeFields, ...(name ? { name } : {}), ...(company ? { company } : {}) });
     await sub.save();
     return {
       subscriber: sub.toJSON(),
@@ -84,6 +88,7 @@ export async function register(body: Record<string, unknown>) {
       name: name || sub.name,
       company: company || sub.company,
       status: "pending_payment",
+      ...modeFields,
     });
     await sub.save();
   } else {
@@ -94,6 +99,7 @@ export async function register(body: Record<string, unknown>) {
       editions,
       company,
       status: "pending_payment",
+      ...modeFields,
     });
   }
 
@@ -103,6 +109,31 @@ export async function register(body: Record<string, unknown>) {
     message:
       "¡Listo! Te enviamos un correo de confirmación. Te contactaremos para coordinar el pago.",
   };
+}
+
+/**
+ * El modo solo viaja al servidor con consentimiento explícito y separado; sin
+ * él se borra lo que hubiera y el correo llega en modo independiente.
+ */
+function modePreference(body: Record<string, unknown>) {
+  const mode = parseMode(body.readingMode);
+  if (body.modeConsent === true && mode) {
+    return { readingModeSealed: seal(mode), modeConsentAt: new Date() };
+  }
+  return { readingModeSealed: "", modeConsentAt: null };
+}
+
+export function modeOf(sub: { readingModeSealed?: string }): ReadingMode | null {
+  return sub.readingModeSealed ? parseMode(unseal(sub.readingModeSealed)) : null;
+}
+
+export async function forgetMode(token: string) {
+  const sub = await Subscriber.findOne({ unsubscribeToken: token });
+  if (!sub) throw new CustomError("El enlace no es válido", 404);
+  sub.readingModeSealed = "";
+  sub.modeConsentAt = null;
+  await sub.save();
+  return { message: "Borramos tu modo de lectura. Tus correos llegarán en modo independiente." };
 }
 
 export async function unsubscribe(token: string) {

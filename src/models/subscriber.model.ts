@@ -20,6 +20,9 @@ export interface ISubscriber {
   company: string;
   paidUntil: Date | null;
   unsubscribeToken: string;
+  /** Modo de lectura cifrado. Solo existe con consentimiento explícito y separado. */
+  readingModeSealed: string;
+  modeConsentAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -38,13 +41,16 @@ const subscriberSchema = new Schema<ISubscriber>(
       unique: true,
       default: () => crypto.randomBytes(24).toString("hex"),
     },
+    readingModeSealed: { type: String, default: "" },
+    modeConsentAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
 subscriberSchema.index({ status: 1, editions: 1 });
 
-applyToJSON(subscriberSchema, ["unsubscribeToken"]);
+// El modo nunca sale en el API, ni siquiera al panel: es dato sensible.
+applyToJSON(subscriberSchema, ["unsubscribeToken", "readingModeSealed"]);
 
 export const Subscriber =
   mongoose.models.Subscriber || mongoose.model<ISubscriber>("Subscriber", subscriberSchema);

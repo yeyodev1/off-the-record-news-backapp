@@ -2,18 +2,21 @@ import { Request, Response, NextFunction } from "express";
 import * as articleService from "../services/article.service";
 import { AuthRequest } from "../types/AuthRequest";
 import { actorName } from "../utils/actor";
+import { parseMode } from "../config/modes";
+import * as modeService from "../services/mode.service";
 
 const q = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
 
 // ——— Público
 
-/** GET /api/articles?section=&tag=&page=&limit= */
+/** GET /api/articles?section=&tag=&modo=&page=&limit= */
 export async function list(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await articleService.listPublished({
       section: q(req.query.section),
       tag: q(req.query.tag),
+      mode: parseMode(req.query.modo),
       page: req.query.page,
       limit: req.query.limit,
     });
@@ -23,19 +26,23 @@ export async function list(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-/** GET /api/articles/top — portada. */
-export async function top(_req: Request, res: Response, next: NextFunction) {
+/** GET /api/articles/top?modo= — portada. */
+export async function top(req: Request, res: Response, next: NextFunction) {
   try {
-    res.status(200).json(await articleService.getTop());
+    res.status(200).json(await articleService.getTop(parseMode(req.query.modo)));
   } catch (error) {
     next(error);
   }
 }
 
-/** GET /api/articles/:slug */
+/** GET /api/articles/:slug?modo= */
 export async function bySlug(req: Request, res: Response, next: NextFunction) {
   try {
-    res.status(200).json(await articleService.getPublicBySlug(String(req.params.slug)));
+    res
+      .status(200)
+      .json(await articleService.getPublicBySlug(String(req.params.slug), parseMode(req.query.modo)));
+    const mode = parseMode(req.query.modo);
+    if (mode) modeService.track(mode, "vistas").catch(() => {});
   } catch (error) {
     next(error);
   }
@@ -201,6 +208,15 @@ export async function rejectUpdate(req: AuthRequest, res: Response, next: NextFu
           await actorName(req),
         ),
       );
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/articles/:id/lens — recalcula la lente por orillas con IA. */
+export async function relens(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await articleService.relens(String(req.params.id), await actorName(req)));
   } catch (error) {
     next(error);
   }

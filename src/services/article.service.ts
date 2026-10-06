@@ -17,19 +17,31 @@ import {
 import { Story } from "../models/story.model";
 import { env } from "../config/env";
 import * as verifierService from "./verifier.service";
-import { escapeRegex, paginate } from "../utils/paginate";
+import { escapeRegex, pageParams, paginate } from "../utils/paginate";
 import { slugify } from "../utils/slugify";
 import * as anthropicService from "./anthropic.service";
 import { ArticleDraft } from "./anthropic.service";
 import * as cloudinaryService from "./cloudinary.service";
 import * as rssService from "./rss.service";
 import { mapLimit, normalizeUrl, stripHtml, truncate } from "../utils/text";
+import { DECAY_PER_HOUR, isWeighted, oppositeOf, ReadingMode, Stance, STANCES } from "../config/modes";
+import * as lensService from "./lens.service";
 
 type ArticleJSON = Record<string, unknown> & { id: string };
 
 // Lo que nunca sale en el API público: datos de la mesa, no del lector.
-const PRIVATE_FIELDS = ["score", "verification", "history", "storyId"] as const;
-const CARD_SELECT = "-body -score -verification -history -updates";
+const PRIVATE_FIELDS = [
+  "score",
+  "verification",
+  "history",
+  "storyId",
+  "lens",
+  "modeRelevance",
+  "modeRelevanceAuto",
+  "modeRelevanceEditedBy",
+  "viewsByMode",
+] as const;
+const CARD_SELECT = "-body -score -verification -history -updates -viewsByMode";
 
 /** Tarjeta pública: sin body, score ni status. */
 export function toCard(doc: any): ArticleJSON {
@@ -112,20 +124,94 @@ function pickEditable(body: Record<string, unknown>): Partial<IArticle> {
       throw new CustomError(`El campo ${key} debe ser una lista`, 400);
     }
   }
+  if (out.sources !== undefined) {
+    if (!Array.isArray(out.sources)) throw new CustomError("El campo sources debe ser una lista", 400);
+    // Una postura desconocida queda "sin valorar" en vez de tumbar el guardado.
+    out.sources = (out.sources as ArticleSource[]).map((source) => ({
+      ...source,
+      stance: STANCES.includes(source.stance as Stance) ? source.stance : "",
+    }));
+  }
   return out as Partial<IArticle>;
 }
 
 // ——— Público
+
+/**
+ * Orden por modo: la relevancia del modo menos lo que pierde por antigüedad.
+ * Reordena lo reciente; lo viejo vuelve a quedar casi cronológico. Las notas
+ * sin lente usan el valor general.
+ */
+function rankStages(mode: ReadingMode) {
+  return [
+    {
+      $addFields: {
+        _rank: {
+          $subtract: [
+            {
+              $ifNull: [
+                `$modeRelevance.${mode}`,
+                { $multiply: [{ $ifNull: ["$score.total", 5] }, 10] },
+              ],
+            },
+            {
+              $multiply: [
+                DECAY_PER_HOUR,
+                { $divide: [{ $subtract: ["$$NOW", "$publishedAt"] }, 3_600_000] },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    { $sort: { _rank: -1 as const, publishedAt: -1 as const } },
+  ];
+}
+
+const CARD_PROJECT = {
+  body: 0,
+  score: 0,
+  verification: 0,
+  history: 0,
+  updates: 0,
+  viewsByMode: 0,
+  evidence: 0,
+  _rank: 0,
+};
+
+async function rankedCards(
+  filter: Record<string, unknown>,
+  mode: ReadingMode,
+  opts: { skip?: number; limit: number },
+) {
+  const docs = await Article.aggregate([
+    { $match: filter },
+    ...rankStages(mode),
+    { $skip: opts.skip ?? 0 },
+    { $limit: opts.limit },
+    { $project: CARD_PROJECT },
+  ]);
+  return docs.map((raw) => toCard(Article.hydrate(raw)));
+}
 
 export async function listPublished(query: {
   section?: string;
   tag?: string;
   page?: unknown;
   limit?: unknown;
+  mode?: ReadingMode | null;
 }) {
   const filter: Record<string, unknown> = { status: "published" };
   if (query.section) filter.section = query.section;
   if (query.tag) filter.tags = String(query.tag).toLowerCase();
+  if (isWeighted(query.mode ?? null)) {
+    const { page, limit, skip } = pageParams(query.page, query.limit, 20);
+    const [items, total] = await Promise.all([
+      rankedCards(filter, query.mode!, { skip, limit }),
+      Article.countDocuments(filter),
+    ]);
+    return { items, total, page, pages: Math.max(1, Math.ceil(total / limit)) };
+  }
   return paginate(
     Article,
     filter,
@@ -134,7 +220,7 @@ export async function listPublished(query: {
   );
 }
 
-export async function getTop() {
+export async function getTop(mode: ReadingMode | null = null) {
   const now = Date.now();
   const since24h = new Date(now - 24 * 3600_000);
   const since6h = new Date(now - 6 * 3600_000);
@@ -153,32 +239,90 @@ export async function getTop() {
 
   const lead = leadByScore ?? latest[0] ?? null;
 
+  // La historia del día, lo último y la última hora son iguales en todos los
+  // modos: el modo solo reordena el resto.
   const bySection = (
     await Promise.all(
       SECTIONS.map(async (section) => ({
         section,
-        items: (
-          await Article.find({ status: "published", section })
-            .sort({ publishedAt: -1 })
-            .limit(4)
-            .select(cardFields)
-        ).map(toCard),
+        items: isWeighted(mode)
+          ? await rankedCards({ status: "published", section }, mode, { limit: 4 })
+          : (
+              await Article.find({ status: "published", section })
+                .sort({ publishedAt: -1 })
+                .limit(4)
+                .select(cardFields)
+            ).map(toCard),
       })),
     )
   ).filter((group) => group.items.length > 0);
 
   return {
+    modo: mode ?? "independiente",
     lead: lead ? toCard(lead) : null,
     breaking: breaking.map(toCard),
     latest: latest.map(toCard),
     bySection,
+    ...(await modeBlocks(mode, lead?._id ?? null)),
   };
 }
 
-export async function getPublicBySlug(slug: string) {
+const MODE_WINDOW_MS = 48 * 3600_000;
+
+/** Bloques que dependen del modo. Nada se oculta: son notas que también están en su sección. */
+async function modeBlocks(mode: ReadingMode | null, leadId: unknown) {
+  const empty = { forMode: [], contradictions: [], otherSide: [] };
+  if (!isWeighted(mode)) return empty;
+  const recent: Record<string, unknown> = {
+    status: "published",
+    publishedAt: { $gte: new Date(Date.now() - MODE_WINDOW_MS) },
+    ...(leadId ? { _id: { $ne: leadId } } : {}),
+  };
+
+  const forMode = await rankedCards(recent, mode, { limit: 5 });
+
+  const contradictions =
+    mode === "anti_ambos"
+      ? await rankedCards(
+          {
+            status: "published",
+            "lens.contradiccion": true,
+            publishedAt: { $gte: new Date(Date.now() - 14 * 24 * 3600_000) },
+          },
+          mode,
+          { limit: 4 },
+        )
+      : [];
+
+  // Alta en la orilla contraria y baja en la propia.
+  const opposite = oppositeOf(mode);
+  const otherSide = opposite
+    ? await rankedCards(
+        {
+          ...recent,
+          [`modeRelevance.${opposite}`]: { $gte: 70 },
+          $expr: {
+            $gte: [
+              { $subtract: [`$modeRelevance.${opposite}`, `$modeRelevance.${mode}`] },
+              15,
+            ],
+          },
+        },
+        opposite,
+        { limit: 4 },
+      )
+    : [];
+
+  return { forMode, contradictions, otherSide };
+}
+
+export async function getPublicBySlug(slug: string, mode: ReadingMode | null = null) {
+  // El modo solo suma a un contador agregado: no se guarda nada del lector.
+  const inc: Record<string, number> = { views: 1 };
+  if (mode) inc[`viewsByMode.${mode}`] = 1;
   const doc = await Article.findOneAndUpdate(
     { slug, status: { $in: ["published", "retracted"] } },
-    { $inc: { views: 1 } },
+    { $inc: inc },
     { new: true },
   );
   if (!doc) throw new CustomError("Nota no encontrada", 404);
@@ -318,7 +462,7 @@ export async function createFromDraft(
       : "pending"
     : (opts.status ?? "pending");
 
-  const doc = await Article.create({
+  const doc = new Article({
     ...draft,
     sources,
     slug: await uniqueSlug(draft.title),
@@ -335,6 +479,8 @@ export async function createFromDraft(
     history: [historyEntry("crear", opts.by ?? "Mesa automática", status)],
     publishedAt: status === "published" ? new Date() : null,
   });
+  await lensService.assessDoc(doc);
+  await doc.save();
   return doc;
 }
 
@@ -370,6 +516,7 @@ export async function update(id: string, body: Record<string, unknown>, by = "")
     throw new CustomError("El titular no puede quedar vacío", 400);
   }
   doc.set(data);
+  if (body.modeRelevance !== undefined) lensService.setManualRelevance(doc, body.modeRelevance, by);
   if (body.status !== undefined) {
     if (!ARTICLE_STATUSES.includes(body.status as ArticleStatus))
       throw new CustomError("Estado inválido", 400);
@@ -557,7 +704,18 @@ export async function rewrite(id: string, instructions: string, by = "") {
     };
   }
   reverify(doc);
+  await lensService.assessDoc(doc);
   doc.history.push(historyEntry("regenerar", by, instructions.trim()));
+  await doc.save();
+  return doc.toJSON();
+}
+
+/** La Mesa pide recalcular la lente (por ejemplo, después de editar a mano). */
+export async function relens(id: string, by = "") {
+  const doc = await getDoc(id);
+  const ok = await lensService.assessDoc(doc);
+  if (!ok) throw new CustomError("La IA no pudo leer el hecho; intenta en unos minutos", 502);
+  doc.history.push(historyEntry("recalcular_lente", by));
   await doc.save();
   return doc.toJSON();
 }

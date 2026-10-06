@@ -6,6 +6,7 @@ import * as adminController from "../controllers/admin.controller";
 import * as articleController from "../controllers/article.controller";
 import * as subscriberController from "../controllers/subscriber.controller";
 import * as tipController from "../controllers/tip.controller";
+import * as modeController from "../controllers/mode.controller";
 
 const router = Router();
 
@@ -25,9 +26,14 @@ router.post("/articles/:id/reject", articleController.reject);
 router.post("/articles/:id/rewrite", articleController.rewrite);
 router.post("/articles/:id/retract", articleController.retract);
 router.post("/articles/:id/wait", articleController.wait);
+router.post("/articles/:id/lens", articleController.relens);
 router.post("/articles/:id/updates/:updateId/publish", articleController.publishUpdate);
 router.post("/articles/:id/updates/:updateId/reject", articleController.rejectUpdate);
 router.post("/articles/:id/image", uploadMiddleware.single("image"), articleController.uploadImage);
+
+// Modos de lectura
+router.get("/modes/stats", modeController.stats);
+router.get("/modes/golden", modeController.golden);
 
 // Señales
 router.get("/signals", adminController.listSignals);

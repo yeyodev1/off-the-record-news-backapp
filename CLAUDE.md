@@ -48,3 +48,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Controllers se importan como namespace: `import * as productController from "../controllers/product.controller"`.
 - Identificadores genéricos en inglés; dominio, comentarios, mensajes y commits en español.
 - Comentarios explican el porqué, no el qué.
+
+## Modos de lectura
+
+- Pesos, modos y posturas en `src/config/modes.ts`. Agregar un modo = una fila en `MODE_WEIGHTS`.
+- `lens.service.ts`: la IA solo clasifica (presencia de orillas, solidez S1–S3, documentos, contradicción, postura por fuente); `computeRelevance` saca los 4 números. La nota tiene una sola versión de texto: nada de redacción por modo.
+- La lente se calcula al crear o reescribir una nota; el cron de la mesa completa las que falten con el tiempo que sobre.
+- `modeRelevanceAuto` (propuesta) + `modeRelevance` corregida por la Mesa = par del golden set (`/admin/modes/golden`).
+- El modo del lector vive en su navegador. En el servidor solo hay contadores anónimos (`ModeMetric`, `viewsByMode`) y, con consentimiento separado, el modo cifrado del suscriptor (`readingModeSealed`, AES-GCM con `MODE_ENCRYPTION_KEY`), que no sale nunca en el API.

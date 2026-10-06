@@ -31,6 +31,20 @@ export async function unsubscribe(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/** GET /api/subscribers/forget-mode/:token — borra el modo guardado (un tap desde el correo). */
+export async function forgetMode(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await subscriberService.forgetMode(String(req.params.token));
+    if (req.accepts(["json", "html"]) === "html") {
+      res.redirect(302, `${env.FRONTEND_URL.replace(/\/+$/, "")}/boletines?modo_borrado=1`);
+      return;
+    }
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 // ——— Admin
 
 /** GET /api/admin/subscribers?status=&plan=&q=&page= */

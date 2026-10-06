@@ -5,5 +5,6 @@ const router = Router();
 
 router.post("/", subscriberController.register);
 router.get("/unsubscribe/:token", subscriberController.unsubscribe);
+router.get("/forget-mode/:token", subscriberController.forgetMode);
 
 export default router;

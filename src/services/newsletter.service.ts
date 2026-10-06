@@ -3,13 +3,16 @@ import { CustomError } from "../errors/customError.error";
 import { Article, SECTION_NAMES, Section } from "../models/article.model";
 import { NewsletterIssue } from "../models/newsletterIssue.model";
 import { Edition, EDITIONS, Subscriber } from "../models/subscriber.model";
-import { articleUrl, unsubscribeUrl } from "../utils/links";
+import { articleUrl, forgetModeUrl, unsubscribeUrl } from "../utils/links";
+import { READING_MODES, ReadingMode } from "../config/modes";
+import * as subscriberService from "./subscriber.service";
 import { paginate } from "../utils/paginate";
 import { escapeHtml, mapLimit } from "../utils/text";
 import * as anthropicService from "./anthropic.service";
 import { layout, sendEmail } from "./email.service";
 
 const UNSUBSCRIBE_PLACEHOLDER = "{{UNSUBSCRIBE_URL}}";
+const FORGET_MODE_PLACEHOLDER = "{{FORGET_MODE}}";
 const MAX_ARTICLES = 10;
 // Ecuador no tiene horario de verano: UTC-5 fijo.
 const EC_OFFSET_MS = 5 * 3600_000;
@@ -63,8 +66,18 @@ function renderHtml(edition: Edition, intro: string, articles: any[]): string {
     <p style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#71717a;margin:0 0 4px">La historia del día</p>
     <p style="margin:0 0 16px">${escapeHtml(intro)}</p>
     <table width="100%" cellpadding="0" cellspacing="0">${articles.map(articleBlock).join("")}</table>
-    <p style="margin-top:24px;font-size:12px;color:#71717a">Recibes este correo porque te suscribiste a Off the Record. <a href="${UNSUBSCRIBE_PLACEHOLDER}" style="color:#71717a">Darte de baja</a>.</p>`;
+    <p style="margin-top:24px;font-size:12px;color:#71717a">Recibes este correo porque te suscribiste a Off the Record. <a href="${UNSUBSCRIBE_PLACEHOLDER}" style="color:#71717a">Darte de baja</a>.${FORGET_MODE_PLACEHOLDER}</p>`;
   return layout(EDITION_TITLE[edition], body);
+}
+
+/**
+ * El primer ítem (la historia del día) es igual para todos; el resto se ordena
+ * por la relevancia del modo. Los textos no cambian.
+ */
+function orderFor(mode: ReadingMode, articles: any[]): any[] {
+  const [first, ...rest] = articles;
+  const value = (a: any) => a.modeRelevance?.[mode] ?? (a.score?.total ?? 5) * 10;
+  return [first, ...rest.sort((a, b) => value(b) - value(a))];
 }
 
 export async function buildIssue(edition: Edition) {
@@ -84,6 +97,12 @@ export async function buildIssue(edition: Edition) {
     subject: subject.trim() || EDITION_TITLE[edition],
     intro,
     html: renderHtml(edition, intro, articles),
+    htmlByMode: Object.fromEntries(
+      READING_MODES.filter((m) => m !== "independiente").map((m) => [
+        m,
+        renderHtml(edition, intro, orderFor(m, articles)),
+      ]),
+    ),
     articleIds: articles.map((a: any) => a._id),
     status: "draft",
   });
@@ -97,17 +116,24 @@ export async function sendIssue(id: string) {
   if (issue.status === "sent") throw new CustomError("Esta edición ya fue enviada", 409);
 
   const subscribers = await Subscriber.find({ status: "active", editions: issue.edition }).select(
-    "email unsubscribeToken",
+    "email unsubscribeToken readingModeSealed",
   );
 
   // Resend limita la tasa de envío; dos en paralelo es suficiente para esta escala.
-  const results = await mapLimit(subscribers, 2, (sub: any) =>
-    sendEmail(
+  const results = await mapLimit(subscribers, 2, (sub: any) => {
+    const mode = subscriberService.modeOf(sub);
+    const html: string = (mode && issue.htmlByMode?.[mode]) || issue.html;
+    const forget = mode
+      ? ` Este correo respeta tu modo de lectura. <a href="${forgetModeUrl(sub.unsubscribeToken)}" style="color:#71717a">Borrar mi modo</a>.`
+      : "";
+    return sendEmail(
       sub.email,
       issue.subject,
-      issue.html.replace(UNSUBSCRIBE_PLACEHOLDER, unsubscribeUrl(sub.unsubscribeToken)),
-    ),
-  );
+      html
+        .replace(UNSUBSCRIBE_PLACEHOLDER, unsubscribeUrl(sub.unsubscribeToken))
+        .replace(FORGET_MODE_PLACEHOLDER, forget),
+    );
+  });
 
   issue.status = "sent";
   issue.recipients = results.filter(Boolean).length;
