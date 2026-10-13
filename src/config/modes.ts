@@ -1,26 +1,38 @@
 /**
- * Modos de lectura (MODOS-DE-LECTURA.md). El modo solo cambia el orden y qué
- * cobertura se ve primero: el texto de la nota es uno solo para todos. Por eso
- * aquí no hay nada de redacción, solo números.
+ * Modos de lectura (MODOS-DE-LECTURA.md, ajustado en la reunión del 13 de
+ * octubre de 2026: quedan tres miradas y "anti-ambos" se funde con
+ * independiente). El modo cambia el orden, qué cobertura se ve primero y el
+ * encuadre del titular y la entrada. Los hechos, cifras y nombres son los
+ * mismos para todos: el verificador revisa cada encuadre contra el corpus.
  */
 
-export const READING_MODES = ["noboista", "correista", "anti_ambos", "independiente"] as const;
+export const READING_MODES = ["noboista", "correista", "independiente"] as const;
 export type ReadingMode = (typeof READING_MODES)[number];
+
+/** Modos con encuadre propio; independiente usa el texto base de la nota. */
+export const FRAMED_MODES = ["noboista", "correista"] as const;
+export type FramedMode = (typeof FRAMED_MODES)[number];
 
 export const MODE_NAMES: Record<ReadingMode, string> = {
   noboista: "Noboísta",
   correista: "Correísta",
-  anti_ambos: "Anti-ambos",
   independiente: "Independiente",
 };
 
 export function parseMode(value: unknown): ReadingMode | null {
-  const mode = String(value ?? "").trim().toLowerCase().replace("-", "_");
+  const mode = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace("-", "_");
+  // Quien eligió anti-ambos antes del cambio sigue leyendo, ahora en independiente.
+  if (mode === "anti_ambos") return "independiente";
   return READING_MODES.includes(mode as ReadingMode) ? (mode as ReadingMode) : null;
 }
 
 /** Modos que reponderan; independiente es el orden editorial tal cual. */
-export function isWeighted(mode: ReadingMode | null): mode is Exclude<ReadingMode, "independiente"> {
+export function isWeighted(
+  mode: ReadingMode | null,
+): mode is Exclude<ReadingMode, "independiente"> {
   return !!mode && mode !== "independiente";
 }
 
@@ -62,8 +74,6 @@ export type ModeRelevance = Record<ReadingMode, number>;
 export const MODE_WEIGHTS: Record<Exclude<ReadingMode, "independiente">, Record<string, number>> = {
   noboista: { oficialismo: 18, correismo: 4, oposicion: 5, institucional: 2, sinOrilla: -10 },
   correista: { oficialismo: 5, correismo: 18, oposicion: 6, institucional: 2, sinOrilla: -10 },
-  // Anti-ambos premia prueba y control, y castiga la pelea de orillas sin sustento.
-  anti_ambos: { institucional: 8, solidez: 8, documentos: 5, contradiccion: 12, puraOrilla: -10 },
 };
 
 /** Garantía del spec: lo grande le llega a todos. */
@@ -77,7 +87,7 @@ const clamp100 = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 /** `general` es el score total de la Mesa (0–10) llevado a 0–100. */
 export function computeRelevance(general: number, lens: Lens | null): ModeRelevance {
   const base = clamp100(general);
-  const out = { noboista: base, correista: base, anti_ambos: base, independiente: base };
+  const out = { noboista: base, correista: base, independiente: base };
   if (!lens) return out;
 
   const signals: Record<string, number> = {
