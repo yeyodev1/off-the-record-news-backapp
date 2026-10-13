@@ -55,6 +55,8 @@ const UPDATE_MIN_REMAINING_MS = 40_000;
 // Piezas por hecho que ve el redactor: las mejor valoradas.
 const MAX_SIGNALS_PER_DRAFT = 6;
 const SIMILAR_TITLE = 0.45;
+// Menos que esto no es contenido: es un título repetido o un video sin descripción.
+const MIN_SUMMARY_CHARS = 60;
 
 interface Collected {
   sourceId: Types.ObjectId;
@@ -321,6 +323,17 @@ export async function draftStory(story: any, { dedupe = false } = {}) {
   if (!signals.length) throw new CustomError("El hecho no tiene señales", 409);
   const primary = signals[0];
   const inputs = signals.map(toInput);
+
+  // Solo títulos (un video sin descripción, un titular suelto): no alcanza para una
+  // nota. El hecho vuelve a esperar hasta que otra fuente lo cuente con datos.
+  const hasContent = signals.some((s) => (s.summary ?? "").trim().length >= MIN_SUMMARY_CHARS);
+  if (!hasContent) {
+    story.status = "watchlist";
+    story.holdUntilCount = story.signalCount;
+    story.reason = "Solo hay títulos sin contenido; espera otra fuente";
+    await story.save();
+    return null;
+  }
 
   const research = await perplexityService.research(
     `${primary.title}. ${primary.summary}`.slice(0, 800),
