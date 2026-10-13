@@ -721,6 +721,11 @@ export async function rewrite(id: string, instructions: string, by = "") {
     throw new CustomError("Escribe las instrucciones para la reescritura", 400);
   const doc = await getDoc(id, { withEvidence: true });
   const draft = await anthropicService.rewriteArticle(doc.toObject(), instructions.trim());
+  if (draft.sinHecho)
+    throw new CustomError(
+      "La reescritura quedó sin un hecho concreto; ajusta las instrucciones",
+      422,
+    );
   // La reescritura no toca imagen, estado ni slug: la URL pública no debe cambiar.
   doc.set({
     title: draft.title,
@@ -784,6 +789,9 @@ export async function fromText(text: string, sourceUrl = "", by = "") {
     throw new CustomError("El texto es muy corto para armar una nota (mínimo 20 caracteres)", 400);
   }
   const draft = await anthropicService.articleFromText(text.trim(), sourceUrl.trim());
+  if (draft.sinHecho) {
+    throw new CustomError("El texto no trae un hecho concreto para armar una nota", 422);
+  }
   const doc = await createFromDraft(draft, {
     origin: "manual",
     status: "pending",
