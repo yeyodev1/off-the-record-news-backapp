@@ -73,6 +73,9 @@ function imageFrom(item: Record<string, unknown>, html: string): string {
     ...asArray(
       (item["media:group"] as Record<string, unknown> | undefined)?.["media:content"] as Node,
     ),
+    ...asArray(
+      (item["media:group"] as Record<string, unknown> | undefined)?.["media:thumbnail"] as Node,
+    ),
   ];
   for (const c of candidates) {
     const url = attr(c, "url");
@@ -106,7 +109,9 @@ function normalizeAtom(entry: Record<string, unknown>): FeedItem {
   const links = asArray(entry.link as Node);
   const alternate =
     links.find((l) => !attr(l, "rel") || attr(l, "rel") === "alternate") ?? links[0];
-  const html = text(entry.content) || text(entry.summary);
+  // YouTube trae la descripción del video dentro de media:group.
+  const group = entry["media:group"] as Record<string, unknown> | undefined;
+  const html = text(entry.content) || text(entry.summary) || text(group?.["media:description"]);
   return {
     title: stripHtml(text(entry.title)),
     url: attr(alternate, "href") || text(alternate),
