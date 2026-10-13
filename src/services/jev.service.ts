@@ -27,7 +27,7 @@ const QUESTIONS: Record<string, JevQuestion> = {
     criteria: {
       true: "un hecho concreto: algo que pasó, se anunció, se aprobó o se denunció",
       false:
-        "opinión, editorial, columna, cartas de lectores, portada o índice de un medio, página de archivo o listado de documentos, texto que dice que no hay información o que algo no ocurrió, horóscopo, publicidad",
+        "el título de un programa, noticiero o transmisión completa sin un hecho concreto (ej. '24 Horas | Central 13/10/2026', 'Televistazo 7PM'), opinión, editorial, columna, cartas de lectores, portada o índice de un medio, página de archivo o listado de documentos, texto que dice que no hay información o que algo no ocurrió, horóscopo, publicidad",
     },
   },
   vigente: {
