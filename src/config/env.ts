@@ -89,8 +89,15 @@ export const env = {
   AUTO_PUBLISH_UPDATES: bool("AUTO_PUBLISH_UPDATES", false),
   MAX_UPDATES_PER_RUN: Number(optional("MAX_UPDATES_PER_RUN", "2")),
   // Horario de la mesa (hora de Ecuador, America/Guayaquil).
-  NEWSROOM_START_HOUR: Number(optional("NEWSROOM_START_HOUR", "8")),
-  NEWSROOM_END_HOUR: Number(optional("NEWSROOM_END_HOUR", "17")),
+  // Por defecto cubre desde los programas de la mañana hasta después de los noticieros de la noche.
+  NEWSROOM_START_HOUR: Number(optional("NEWSROOM_START_HOUR", "5")),
+  NEWSROOM_END_HOUR: Number(optional("NEWSROOM_END_HOUR", "23")),
+  // Costo de las búsquedas con IA: frecuencia por fuente y tope de búsquedas por ciclo.
+  AI_SOURCE_EVERY_MINUTES: Number(optional("AI_SOURCE_EVERY_MINUTES", "60")),
+  PEOPLE_EVERY_MINUTES: Number(optional("PEOPLE_EVERY_MINUTES", "180")),
+  MAX_AI_QUERIES_PER_RUN: Number(optional("MAX_AI_QUERIES_PER_RUN", "6")),
+  // Google Sheet de fuentes publicado como CSV (Archivo → Compartir → Publicar en la web → CSV).
+  SOURCES_SHEET_CSV_URL: optional("SOURCES_SHEET_CSV_URL", ""),
 
   // Telegram: editores aprueban y publican, reporteros mandan notas a la Mesa,
   // el resto manda denuncias por chat privado.
