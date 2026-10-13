@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { env } from "../config/env";
 import { CustomError } from "../errors/customError.error";
-import { Article, ArticleImage, ArticleSource } from "../models/article.model";
+import { Article, ArticleImage, ArticleSource, COVERED_SECTIONS } from "../models/article.model";
 import { PipelineRun } from "../models/pipelineRun.model";
 import { Signal } from "../models/signal.model";
 import { Source } from "../models/source.model";
@@ -24,6 +24,7 @@ import * as rssService from "./rss.service";
 import * as storyService from "./story.service";
 import * as telegramService from "./telegram.service";
 import * as verifierService from "./verifier.service";
+import * as sourceSchedule from "./sourceSchedule.service";
 
 /**
  * El editor general. Cada ciclo: recoge señales de las fuentes, descarta lo
@@ -113,6 +114,38 @@ async function collectFromSource(
     await Source.updateOne({ _id: source._id }, { lastCheckedAt: new Date(), lastError: message });
     return [];
   }
+}
+
+/** Una búsqueda de IA puede cubrir varias fuentes (personas agrupadas). */
+async function collectAiJob(
+  job: sourceSchedule.AiJob,
+  errors: string[],
+  phaseDeadline: number,
+): Promise<Collected[]> {
+  const ids = job.sources.map((s) => s._id);
+  const label = job.sources.map((s) => s.name).join(", ");
+  if (Date.now() > phaseDeadline) {
+    errors.push(`Búsqueda "${label}": sin tiempo en este ciclo`);
+    return [];
+  }
+  const { items, error } = await perplexityService.discover(job.query);
+  await Source.updateMany(
+    { _id: { $in: ids } },
+    { lastCheckedAt: new Date(), lastError: error ? error.slice(0, 300) : "" },
+  );
+  if (error) {
+    errors.push(`Búsqueda "${label}": ${error.slice(0, 300)}`);
+    return [];
+  }
+  return items
+    .map((i) => ({
+      ...i,
+      sourceId: job.sources[0]._id,
+      weight: job.weight,
+      imageUrl: "",
+      sourceName: i.sourceName || job.sources[0].name,
+    }))
+    .filter(isRecent);
 }
 
 /**
@@ -211,7 +244,14 @@ async function scorePending(signals: any[], errors: string[]): Promise<number> {
               // Un hecho de días atrás no es noticia del día aunque la nota sea nueva.
               // Lo repetido no se descarta: el agrupador lo une a su hecho y puede
               // volverse una actualización.
-              status: r.notNews || r.score.inmediatez < MIN_INMEDIATEZ ? "discarded" : "scored",
+              // Lo que OTR no cubre (mundo, farándula, sociedad sin peso político)
+              // se descarta aunque puntúe: solo Ecuador y solo las cinco secciones.
+              status:
+                r.notNews ||
+                r.score.inmediatez < MIN_INMEDIATEZ ||
+                !COVERED_SECTIONS.includes(r.section)
+                  ? "discarded"
+                  : "scored",
             },
           ),
         ),
@@ -344,7 +384,8 @@ async function saveDraft(
     { _id: { $in: signals.map((s) => s._id) } },
     { status: "drafted", articleId: article._id },
   );
-  if (!primary.imageUrl && image) await Signal.updateOne({ _id: primary._id }, { imageUrl: image.url });
+  if (!primary.imageUrl && image)
+    await Signal.updateOne({ _id: primary._id }, { imageUrl: image.url });
   story.articleId = article._id;
   story.status = "covered";
   story.reason = article.status === "published" ? "Publicada" : "Nota por aprobar";
@@ -384,12 +425,13 @@ async function proposeUpdates(
       lede: article.lede,
       keyPoints: article.keyPoints,
       body: article.body,
-      updates: article.updates
-        .filter((u: any) => u.status !== "rejected")
-        .map((u: any) => u.text),
+      updates: article.updates.filter((u: any) => u.status !== "rejected").map((u: any) => u.text),
     };
     try {
-      if (gatewayService.isGatewayConfigured() && !(await jevService.bringsNewFacts(known, signal))) {
+      if (
+        gatewayService.isGatewayConfigured() &&
+        !(await jevService.bringsNewFacts(known, signal))
+      ) {
         signal.status = "duplicate";
         await signal.save();
         continue;
@@ -404,7 +446,10 @@ async function proposeUpdates(
       const update = await articleService.addUpdate(article, {
         text: texto,
         sources: [{ name: signal.sourceName, url: signal.url, summary: signal.summary ?? "" }],
-        evidence: verifierService.buildEvidence([anthropicService.signalsBlock([input])], [signal.url]),
+        evidence: verifierService.buildEvidence(
+          [anthropicService.signalsBlock([input])],
+          [signal.url],
+        ),
         signalId: signal._id,
       });
       signal.status = "drafted";
@@ -453,13 +498,13 @@ export async function runCycle({
   if (!sources.length) return finish("no hay fuentes activas");
 
   const collectDeadline = Date.now() + COLLECT_BUDGET_MS;
-  const rssSources = sources.filter((s: any) => s.kind === "rss");
-  const aiSources = sources.filter((s: any) => s.kind === "perplexity");
+  const rssSources = sources.filter((s: any) => s.kind === "rss" && sourceSchedule.isDue(s));
+  const aiJobs = perplexityService.isPerplexityConfigured()
+    ? sourceSchedule.planAiJobs(sources.filter((s: any) => s.kind === "perplexity"))
+    : [];
   const [fromRss, fromAi] = await Promise.all([
     mapLimit(rssSources, FETCH_CONCURRENCY, (s) => collectFromSource(s, errors, collectDeadline)),
-    mapLimit(aiSources, PERPLEXITY_CONCURRENCY, (s) =>
-      collectFromSource(s, errors, collectDeadline),
-    ),
+    mapLimit(aiJobs, PERPLEXITY_CONCURRENCY, (job) => collectAiJob(job, errors, collectDeadline)),
   ]);
   const collected = [...fromRss, ...fromAi].flat();
   run.signalsFound = collected.length;
