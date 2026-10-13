@@ -326,6 +326,14 @@ export async function draftStory(story: any, { dedupe = false } = {}) {
     `${primary.title}. ${primary.summary}`.slice(0, 800),
   );
   const draft = await anthropicService.writeArticle(inputs, research);
+  // Sin hecho que contar (el título de un noticiero, una portada): no se publica nada.
+  if (draft.sinHecho) {
+    story.status = "discarded";
+    story.reason = "El material no traía un hecho concreto";
+    await story.save();
+    await Signal.updateMany({ storyId: story._id, status: "scored" }, { status: "discarded" });
+    return null;
+  }
   // El corpus es exactamente lo que vio el redactor: contra eso se verifica.
   const evidence = verifierService.buildEvidence(
     [anthropicService.signalsBlock(inputs), anthropicService.researchBlock(research)],
@@ -583,7 +591,8 @@ export async function runCycle({
     }
     try {
       const article = await draftStory(story, { dedupe: true });
-      if (!article) errors.push(`Descartada por repetida tras redactar: "${story.title}"`);
+      if (!article)
+        errors.push(`Descartada tras redactar (repetida o sin hecho concreto): "${story.title}"`);
       return Boolean(article);
     } catch (error) {
       errors.push(`Redacción "${story.title}": ${errorMessage(error)}`);
@@ -636,6 +645,10 @@ export async function draftStoryById(id: string) {
     throw new CustomError("Este hecho ya tiene una nota redactada", 409);
   }
   const article = await draftStory(story);
-  if (!article) throw new CustomError("El hecho ya estaba cubierto por otra nota", 409);
+  if (!article)
+    throw new CustomError(
+      "No salió nota: el hecho ya estaba cubierto o el material no traía un hecho concreto",
+      409,
+    );
   return article.toJSON();
 }
