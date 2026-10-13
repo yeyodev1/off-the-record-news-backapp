@@ -7,7 +7,11 @@ import { decodeEntities, stripHtml, truncate } from "../utils/text";
  */
 
 const USER_AGENT = "OffTheRecordBot/1.0 (+https://offtherecord.ec; mesa de redacción)";
-const FEED_TIMEOUT_MS = 10_000;
+// Varios feeds del Estado (Defensa, Interior, Vicepresidencia) cortan a clientes que
+// no parecen navegador y responden lento: UA de navegador que igual se identifica.
+const FEED_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36 OffTheRecordBot/1.0";
+const FEED_TIMEOUT_MS = 20_000;
 const PAGE_TIMEOUT_MS = 5_000;
 
 export interface FeedItem {
@@ -136,7 +140,7 @@ export function parseFeed(xml: string): FeedItem[] {
 export async function fetchFeed(url: string, limit = 25): Promise<FeedItem[]> {
   const response = await fetch(url, {
     headers: {
-      "User-Agent": USER_AGENT,
+      "User-Agent": FEED_USER_AGENT,
       Accept:
         "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
     },
