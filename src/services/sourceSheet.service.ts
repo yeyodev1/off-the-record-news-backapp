@@ -190,6 +190,15 @@ export async function syncFromSheet() {
     };
   }
   const response = await fetch(env.SOURCES_SHEET_CSV_URL, { signal: AbortSignal.timeout(30_000) });
+  // Sheet privado: no es una falla del servidor, falta compartirlo "con cualquiera que tenga el enlace".
+  if (response.status === 401 || response.status === 403) {
+    return {
+      skipped: "El Sheet no está compartido con enlace: Compartir → Cualquier persona con el enlace → Lector",
+      created: 0,
+      updated: 0,
+      deactivated: 0,
+    };
+  }
   if (!response.ok) throw new CustomError(`El Sheet de fuentes respondió ${response.status}`, 502);
   return syncFromCsv(await response.text());
 }
