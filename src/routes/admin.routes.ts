@@ -65,6 +65,7 @@ router.delete("/telegram/members/:id", adminController.removeTelegramMember);
 router.get("/sources", adminController.listSources);
 router.post("/sources", adminController.createSource);
 router.post("/sources/sync", adminController.syncSources);
+router.post("/sources/import", adminController.importSources);
 router.put("/sources/:id", adminController.updateSource);
 router.delete("/sources/:id", adminController.deleteSource);
 
