@@ -17,6 +17,7 @@
     "seed:sources": "ts-node-dev --transpile-only src/scripts/seed-sources.ts",
     "newsroom:run": "ts-node-dev --transpile-only src/scripts/run-newsroom.ts",
     "telegram:webhook": "ts-node-dev --transpile-only src/scripts/set-telegram-webhook.ts",
+    "sources:import": "ts-node-dev --transpile-only src/scripts/import-sources.ts",
     "backfill:sources": "ts-node-dev --transpile-only src/scripts/backfill-source-summaries.ts"
   },
   "dependencies": {
