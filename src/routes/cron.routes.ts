@@ -38,5 +38,6 @@ router.get("/newsroom", cronController.newsroom);
 router.get("/newsletter/manana", cronController.newsletterManana);
 router.get("/newsletter/noche", cronController.newsletterNoche);
 router.get("/subscriptions", cronController.subscriptions);
+router.get("/sources", cronController.sources);
 
 export default router;
