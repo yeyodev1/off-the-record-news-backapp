@@ -129,11 +129,16 @@ export function rowsToSources(rows: string[][]): { items: SheetRow[]; errors: st
     }
     const person = PEOPLE_CATEGORIES.includes(category);
     // Sin consulta escrita, se arma una con lo que haya; las personas se buscan en grupo.
+    // Los links de la fila (web, cuenta de X) le dicen a la búsqueda dónde mirar primero.
+    const links = [url, ...(notes.match(/https?:\/\/\S+/g) ?? [])].filter(Boolean);
+    const lookAt = links.length ? `. Revisa primero: ${[...new Set(links)].join(", ")}` : "";
+    const written = get(r, "consulta");
     const query =
-      get(r, "consulta") ||
-      (kind === "perplexity" && !person
-        ? `lo publicado hoy por ${name}${url ? ` (${url})` : ""}${notes ? `, ${notes}` : ""}`
-        : "");
+      kind !== "perplexity" || person
+        ? written
+        : written
+          ? `${written}${lookAt}`
+          : `lo publicado hoy por ${name}${notes ? `, ${notes}` : ""}${lookAt}`;
     const weight = Number(get(r, "peso").replace(",", "."));
     const every = Number(get(r, "cada_minutos"));
     items.push({
