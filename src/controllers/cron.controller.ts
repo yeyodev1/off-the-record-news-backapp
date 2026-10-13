@@ -3,6 +3,8 @@ import * as newsletterService from "../services/newsletter.service";
 import * as newsroomService from "../services/newsroom.service";
 import * as subscriberService from "../services/subscriber.service";
 import * as lensService from "../services/lens.service";
+import * as framingService from "../services/framing.service";
+import * as sourceSheetService from "../services/sourceSheet.service";
 
 // La función de Vercel vive 300 s; lo que sobre del ciclo se usa para la lente.
 const FUNCTION_BUDGET_MS = 285_000;
@@ -19,7 +21,11 @@ export async function newsroom(_req: Request, res: Response, next: NextFunction)
     const deadline = startedAt + FUNCTION_BUDGET_MS - 20_000;
     const lensed =
       deadline - Date.now() > 20_000 ? await lensService.backfill(8, deadline).catch(() => 0) : 0;
-    res.status(200).json({ ...run, lensed });
+    const framed =
+      deadline - Date.now() > 30_000
+        ? await framingService.backfill(4, deadline).catch(() => 0)
+        : 0;
+    res.status(200).json({ ...run, lensed, framed });
   } catch (error) {
     next(error);
   }
@@ -47,6 +53,15 @@ export async function newsletterNoche(_req: Request, res: Response, next: NextFu
 export async function subscriptions(_req: Request, res: Response, next: NextFunction) {
   try {
     res.status(200).json(await subscriberService.expireOverdue());
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** GET /api/cron/sources — trae las fuentes del Google Sheet de la redacción. */
+export async function sources(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await sourceSheetService.syncFromSheet());
   } catch (error) {
     next(error);
   }
