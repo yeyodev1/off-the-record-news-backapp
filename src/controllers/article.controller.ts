@@ -17,6 +17,7 @@ export async function list(req: Request, res: Response, next: NextFunction) {
       section: q(req.query.section),
       tag: q(req.query.tag),
       mode: parseMode(req.query.modo),
+      order: q(req.query.orden),
       page: req.query.page,
       limit: req.query.limit,
     });
@@ -40,7 +41,9 @@ export async function bySlug(req: Request, res: Response, next: NextFunction) {
   try {
     res
       .status(200)
-      .json(await articleService.getPublicBySlug(String(req.params.slug), parseMode(req.query.modo)));
+      .json(
+        await articleService.getPublicBySlug(String(req.params.slug), parseMode(req.query.modo)),
+      );
     const mode = parseMode(req.query.modo);
     if (mode) modeService.track(mode, "vistas").catch(() => {});
   } catch (error) {
@@ -87,7 +90,11 @@ export async function create(req: AuthRequest, res: Response, next: NextFunction
 /** PUT /api/admin/articles/:id */
 export async function update(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    res.status(200).json(await articleService.update(String(req.params.id), req.body ?? {}, await actorName(req)));
+    res
+      .status(200)
+      .json(
+        await articleService.update(String(req.params.id), req.body ?? {}, await actorName(req)),
+      );
   } catch (error) {
     next(error);
   }
@@ -115,7 +122,11 @@ export async function reject(req: AuthRequest, res: Response, next: NextFunction
 export async function rewrite(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const instructions = String(req.body?.instructions ?? "");
-    res.status(200).json(await articleService.rewrite(String(req.params.id), instructions, await actorName(req)));
+    res
+      .status(200)
+      .json(
+        await articleService.rewrite(String(req.params.id), instructions, await actorName(req)),
+      );
   } catch (error) {
     next(error);
   }
