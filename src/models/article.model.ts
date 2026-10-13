@@ -1,6 +1,14 @@
 import mongoose, { Schema, Types } from "mongoose";
 import { applyToJSON } from "../utils/toJSON";
-import { Lens, ModeRelevance, READING_MODES, Stance, STANCES } from "../config/modes";
+import {
+  FRAMED_MODES,
+  FramedMode,
+  Lens,
+  ModeRelevance,
+  READING_MODES,
+  Stance,
+  STANCES,
+} from "../config/modes";
 
 export const SECTIONS = [
   "politica",
@@ -13,6 +21,19 @@ export const SECTIONS = [
   "tecnologia",
 ] as const;
 export type Section = (typeof SECTIONS)[number];
+
+/**
+ * Lo que OTR cubre (reunión del 13/10/2026): política, economía, Asamblea,
+ * seguridad y negocios de Ecuador. Las otras secciones existen por las notas
+ * viejas, pero la mesa automática ya no redacta para ellas.
+ */
+export const COVERED_SECTIONS: readonly Section[] = [
+  "politica",
+  "economia",
+  "legislativo",
+  "seguridad",
+  "negocios",
+];
 
 export const SECTION_NAMES: Record<Section, string> = {
   politica: "Política",
@@ -116,6 +137,13 @@ export interface HistoryEntry {
   note: string;
 }
 
+/** Titular, entrada y "Por qué importa" encuadrados para una mirada. Mismos hechos. */
+export interface Framing {
+  title: string;
+  lede: string;
+  whyItMatters: string;
+}
+
 /** Mensaje de Telegram ligado a la nota, para reconocer respuestas y editar botones. */
 export interface TelegramCard {
   chatId: string;
@@ -166,6 +194,10 @@ export interface IArticle {
   modeRelevanceEditedBy: string;
   /** Vistas agregadas por modo, anónimas: sin IP ni nada del lector. */
   viewsByMode: Partial<ModeRelevance>;
+  /** Encuadre por mirada. Independiente usa el texto base. */
+  framing: Partial<Record<FramedMode, Framing>> | null;
+  /** "Patitas" de la noticia: ideas de seguimiento para la Mesa. Nunca salen al lector. */
+  followUps: string[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -230,6 +262,15 @@ const sourceSchema = {
 
 const modeNumbers = Object.fromEntries(READING_MODES.map((m) => [m, { type: Number, default: 0 }]));
 const modeRelevanceSchema = new Schema<ModeRelevance>(modeNumbers, { _id: false });
+
+const framingItem = new Schema<Framing>(
+  { title: String, lede: String, whyItMatters: String },
+  { _id: false },
+);
+const framingSchema = new Schema(
+  Object.fromEntries(FRAMED_MODES.map((m) => [m, { type: framingItem, default: null }])),
+  { _id: false },
+);
 
 const lensSchema = new Schema<Lens>(
   {
@@ -319,6 +360,8 @@ const articleSchema = new Schema<IArticle>(
     modeRelevanceAuto: { type: modeRelevanceSchema, default: null },
     modeRelevanceEditedBy: { type: String, default: "" },
     viewsByMode: { type: new Schema(modeNumbers, { _id: false }), default: () => ({}) },
+    framing: { type: framingSchema, default: null },
+    followUps: { type: [String], default: [] },
   },
   { timestamps: true },
 );
