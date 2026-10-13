@@ -249,3 +249,12 @@ export async function syncSources(_req: Request, res: Response, next: NextFuncti
     next(error);
   }
 }
+
+/** POST /api/admin/sources/import — body: { csv }. Mismo formato del Sheet; las fuentes quedan administradas por el Sheet. */
+export async function importSources(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await sourceSheetService.syncFromCsv(String(req.body?.csv ?? "")));
+  } catch (error) {
+    next(error);
+  }
+}
