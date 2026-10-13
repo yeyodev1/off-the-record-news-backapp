@@ -65,12 +65,12 @@ La Posta,medio,,https://www.youtube.com/@LaPostaEc,noticias y programas de La Po
 Ecuadorinmediato,medio,,https://www.ecuadorinmediato.com/noticias,noticias de Ecuadorinmediato de hoy,0.9,180,si,https://x.com/ecuainm_oficial
 Pichincha Comunicaciones,medio,,https://www.radiopichincha.com/,noticias de Pichincha Comunicaciones de hoy,0.9,180,si,https://x.com/radio_pichincha
 Milhojas,medio,,,investigaciones de Milhojas Ecuador,0.9,360,no,el sitio ya no existe
-BN Periodismo (programa de la mañana),programa,,https://www.youtube.com/@BNPeriodismo,"lo dicho hoy en el programa matutino de BN Periodismo en YouTube: entrevistas, declaraciones y temas",1.2,720,si,transcripción del programa de la mañana en YouTube · https://x.com/BNPeriodismo · programa de la mañana en YouTube
-Fabricio Vela · La Primera Plana,programa,,https://www.youtube.com/@primeraplanaecu4053,lo dicho hoy en La Primera Plana con Fabricio Vela: entrevistas y declaraciones,1.2,720,si,revisar transcripción de la mañana · https://x.com/PrimeraPlanaECU · confirmar que Primera Plana ECU es el programa de Fabricio Vela
+BN Periodismo (programa de la mañana),programa,,https://www.youtube.com/@BNPeriodismo,"lo dicho hoy en el programa matutino de BN Periodismo en YouTube: entrevistas, declaraciones y temas",1.2,720,si,programa de la mañana en YouTube · https://x.com/BNPeriodismo
+Fabricio Vela · La Primera Plana,programa,,https://www.youtube.com/@primeraplanaecu4053,lo dicho hoy en La Primera Plana con Fabricio Vela: entrevistas y declaraciones,1.2,720,si,https://x.com/PrimeraPlanaECU · confirmar que Primera Plana ECU es el programa de Fabricio Vela
 Televistazo mediodía (Ecuavisa),programa,,https://www.youtube.com/@EcuavisaNoticieros,lo que informó hoy Televistazo de Ecuavisa en su emisión de mediodía,1.1,720,si,"en el canal: videos ""Televistazo 1PM"""
-Televistazo noche (Ecuavisa),programa,,https://www.youtube.com/@EcuavisaNoticieros,lo que informó hoy Televistazo de Ecuavisa en su emisión de la noche,1.2,720,si,"antes del newsletter PM · en el canal: videos ""Televistazo 7PM""; antes del newsletter PM"
+Televistazo noche (Ecuavisa),programa,,https://www.youtube.com/@EcuavisaNoticieros,lo que informó hoy Televistazo de Ecuavisa en su emisión de la noche,1.2,720,si,"en el canal: videos ""Televistazo 7PM"" · antes del newsletter PM"
 24 Horas mediodía (Teleamazonas),programa,,https://www.youtube.com/@TeleamazonasEcuadorOficial,lo que informó hoy 24 Horas de Teleamazonas al mediodía,1.1,720,si,"en el canal: ""24 Horas ... Central"""
-24 Horas noche (Teleamazonas),programa,,https://www.youtube.com/@TeleamazonasEcuadorOficial,lo que informó hoy 24 Horas de Teleamazonas en la noche,1.2,720,si,"antes del newsletter PM · en el canal: ""24 Horas ... Estelar""; antes del newsletter PM"
+24 Horas noche (Teleamazonas),programa,,https://www.youtube.com/@TeleamazonasEcuadorOficial,lo que informó hoy 24 Horas de Teleamazonas en la noche,1.2,720,si,"en el canal: ""24 Horas ... Estelar"" · antes del newsletter PM"
 Contacto Directo (Ecuavisa),programa,,https://www.youtube.com/@Ecuavisa,entrevista de hoy en Contacto Directo de Ecuavisa,1.2,720,si,"en el canal: videos ""CONTACTO DIRECTO"""
 Los Outsiders,programa,,https://www.youtube.com/@OutsidersEc,lo dicho hoy en el programa Los Outsiders,1,720,si,
 Daniel Noboa,politico,,https://x.com/DanielNoboaOk,,1.5,,si,"presidente de la República (2025-2029), ADN · https://danielnoboaazin.com/"
@@ -171,8 +171,8 @@ Ecuadorinmediato · RSS,medio,rss,https://www.ecuadorinmediato.com/feed.xml,,0.9
 Pichincha Comunicaciones · RSS,medio,rss,https://www.youtube.com/feeds/videos.xml?channel_id=UCK0WHZbs_ZJ4r7DMuft7p-g,,0.9,,si,feed de Pichincha Comunicaciones
 BN Periodismo (programa de la mañana) · RSS,programa,rss,https://www.youtube.com/feeds/videos.xml?channel_id=UCk3eFaIQTyb-i_P5qrfhLVg,,1.2,,si,feed de BN Periodismo (programa de la mañana)
 Fabricio Vela · La Primera Plana · RSS,programa,rss,https://primeraplana.com.ec/feed/,,1.2,,si,feed de Fabricio Vela · La Primera Plana
-Ecuavisa Noticieros (Televistazo) · YouTube,programa,rss,https://www.youtube.com/feeds/videos.xml?channel_id=UCx6TdW_j_WKafftaMM-Ttzg,,1.1,,si,feed de Televistazo mediodía (Ecuavisa)
-Teleamazonas (24 Horas) · YouTube,programa,rss,https://www.youtube.com/feeds/videos.xml?channel_id=UCCwRtme3lumNRQXMO2EvCvw,,1.1,,si,feed de 24 Horas mediodía (Teleamazonas)
+Ecuavisa Noticieros (Televistazo) · YouTube,programa,rss,https://www.youtube.com/feeds/videos.xml?channel_id=UCx6TdW_j_WKafftaMM-Ttzg,,1.1,,si,canal de noticieros de Ecuavisa: Televistazo 1PM y 7PM
+Teleamazonas (24 Horas) · YouTube,programa,rss,https://www.youtube.com/feeds/videos.xml?channel_id=UCCwRtme3lumNRQXMO2EvCvw,,1.1,,si,canal de Teleamazonas: 24 Horas Central y Estelar
 Contacto Directo (Ecuavisa) · RSS,programa,rss,https://www.youtube.com/feeds/videos.xml?channel_id=UCRUV3nUNSc-xpBrTwQOCQQg,,1.2,,si,feed de Contacto Directo (Ecuavisa)
 Los Outsiders · RSS,programa,rss,https://www.youtube.com/feeds/videos.xml?channel_id=UCKhAVvmd-C4IqSAZ--9JRAQ,,1,,si,feed de Los Outsiders
 Fundamedios · RSS,sociedad_civil,rss,https://fundamedios.org.ec/feed/,,0.9,,si,feed de Fundamedios
