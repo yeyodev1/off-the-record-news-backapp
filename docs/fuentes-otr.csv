@@ -1,0 +1,132 @@
+nombre,categoria,tipo,url,consulta,peso,cada_minutos,activa,notas
+Presidencia de la República,institucion,,,"decretos, anuncios y agenda del presidente Daniel Noboa (cuenta @Presidencia_Ec y presidencia.gob.ec)",1.5,30,si,
+Vicepresidencia de la República,institucion,,,actividades y anuncios de la Vicepresidencia de Ecuador,1,180,si,
+Secretaría de Comunicación (Secom),institucion,,,comunicados oficiales del Gobierno de Ecuador y cadenas nacionales,1.2,60,si,
+Ministerio de Gobierno,institucion,,,anuncios del Ministerio de Gobierno de Ecuador,1,120,si,
+Ministerio del Interior,institucion,,,anuncios del Ministerio del Interior de Ecuador sobre seguridad y Policía,1.2,60,si,
+Ministerio de Defensa,institucion,,,Ministerio de Defensa y Fuerzas Armadas de Ecuador: operativos y anuncios,1.1,120,si,
+Ministerio de Economía y Finanzas,institucion,,,"Ministerio de Economía y Finanzas de Ecuador: presupuesto, deuda, pagos y bonos",1.4,60,si,
+Ministerio de Energía y Minas,institucion,,,"Ministerio de Energía y Minas de Ecuador: electricidad, apagones, petróleo y minería",1.3,60,si,
+Ministerio de Producción (MPCEIP),institucion,,,"Ministerio de Producción y Comercio Exterior de Ecuador: acuerdos comerciales, aranceles, exportaciones",1.1,180,si,
+Ministerio de Educación,institucion,,,decisiones del Ministerio de Educación de Ecuador,0.9,240,si,
+Ministerio de Salud,institucion,,,decisiones del Ministerio de Salud Pública de Ecuador,0.9,240,si,
+Cancillería,institucion,,,"Cancillería de Ecuador: relaciones exteriores, acuerdos y crisis diplomáticas",1.1,180,si,
+Ministerio del Trabajo,institucion,,,"Ministerio del Trabajo de Ecuador: salario, empleo público, reformas laborales",0.9,240,si,
+Ministerio de Infraestructura y Transporte,institucion,,,"obras públicas, vías y transporte en Ecuador",0.8,360,si,
+SRI,institucion,,,"Servicio de Rentas Internas de Ecuador: impuestos, recaudación y reformas tributarias",1.1,180,si,
+SENAE (Aduana),institucion,,,"Aduana del Ecuador: decomisos, aranceles y comercio",0.8,360,si,
+Banco Central del Ecuador,institucion,,,"Banco Central del Ecuador: cifras de liquidez, PIB, inflación y reservas",1.3,180,si,
+Petroecuador,institucion,,,"Petroecuador: producción, derrames, contratos y licitaciones",1.2,120,si,
+Policía Nacional,institucion,,,"Policía Nacional del Ecuador: operativos, capturas y crimen organizado",1.1,60,si,
+SNAI (cárceles),institucion,,,"SNAI Ecuador: cárceles, fugas, crisis penitenciaria",1.1,120,si,
+IESS,institucion,,,"IESS Ecuador: pensiones, salud y finanzas del seguro social",1,240,si,
+Asamblea Nacional (pleno),institucion,,,"Asamblea Nacional de Ecuador: sesiones del pleno, votaciones, leyes y juicios políticos",1.5,30,si,
+Presidencia de la Asamblea y CAL,institucion,,,Presidencia de la Asamblea y Consejo de Administración Legislativa de Ecuador: agenda y calificación de proyectos,1.1,180,si,
+Comisiones de la Asamblea,institucion,,,"comisiones de la Asamblea Nacional de Ecuador: fiscalización, comparecencias e informes",1.1,120,si,
+Corte Constitucional,institucion,,,"Corte Constitucional de Ecuador: dictámenes, fallos y consultas populares",1.3,120,si,
+Corte Nacional de Justicia,institucion,,,Corte Nacional de Justicia de Ecuador: audiencias y sentencias de casos políticos,1.2,120,si,
+Consejo de la Judicatura,institucion,,,"Consejo de la Judicatura de Ecuador: jueces, sanciones y designaciones",1,240,si,
+Fiscalía General del Estado,institucion,,,"Fiscalía de Ecuador: casos de corrupción, allanamientos, formulaciones de cargos",1.4,60,si,
+CNE,institucion,,,"Consejo Nacional Electoral de Ecuador: calendario, candidatos, consultas y elecciones seccionales 2027",1.2,120,si,
+TCE,institucion,,,Tribunal Contencioso Electoral de Ecuador: sanciones y fallos electorales,1,240,si,
+CPCCS,institucion,,,"Consejo de Participación Ciudadana de Ecuador: designaciones, concursos y consejeros",1.2,120,si,
+Contraloría General del Estado,institucion,,,"Contraloría de Ecuador: informes, glosas y responsabilidades",1.1,180,si,
+Defensoría del Pueblo,institucion,,,Defensoría del Pueblo de Ecuador: pronunciamientos y alertas de derechos,0.9,360,si,
+Procuraduría General del Estado,institucion,,,Procuraduría de Ecuador: arbitrajes y litigios internacionales del Estado,0.9,360,si,
+Superintendencias,institucion,,,"Superintendencias de Bancos, Compañías y Competencia de Ecuador: sanciones y resoluciones",1,240,si,
+Municipio de Quito,institucion,,,"Municipio de Quito y alcalde Pabel Muñoz: decisiones, concejo y servicios",1,120,si,
+Municipio de Guayaquil,institucion,,,"Municipio de Guayaquil y alcalde Aquiles Álvarez: decisiones, concejo y servicios",1.1,120,si,
+Prefectura del Guayas,institucion,,,Prefectura del Guayas: decisiones y conflictos con el Gobierno,0.9,240,si,
+Prefectura de Pichincha,institucion,,,Prefectura de Pichincha: decisiones y conflictos con el Gobierno,0.9,240,si,
+Municipio de Cuenca,institucion,,,Municipio de Cuenca: decisiones del alcalde y el concejo,0.8,360,si,
+Primicias,medio,,,"noticias de Primicias Ecuador de hoy sobre política, economía y seguridad",1.3,30,si,
+El Universo (búsqueda),medio,,,noticias de El Universo Ecuador de hoy sobre política y economía,1.2,60,si,
+Expreso (búsqueda),medio,,,"noticias de Expreso Ecuador de hoy, incluida la edición impresa",1.2,60,si,
+El Comercio (búsqueda),medio,,,noticias de El Comercio Ecuador de hoy,1.1,60,si,
+La Hora,medio,,,noticias de La Hora Ecuador de hoy,1,120,si,
+El Telégrafo,medio,,,noticias de El Telégrafo Ecuador de hoy,0.8,240,si,
+Vistazo,medio,,,noticias y reportajes de Vistazo Ecuador,1,240,si,
+Radio Democracia,medio,,,entrevistas y noticias de Radio Democracia Ecuador de hoy,1.2,120,si,
+FM Mundo,medio,,,entrevistas y noticias de FM Mundo Ecuador de hoy,1.2,120,si,
+Radio Pichincha (búsqueda),medio,,,entrevistas y noticias de Radio Pichincha de hoy,1,120,si,
+Radiocentro,medio,,,noticias y entrevistas de Radiocentro Ecuador de hoy,1,120,si,
+Radio Visión,medio,,,entrevistas de Radio Visión Quito de hoy,0.9,240,si,
+Radio Quito,medio,,,noticias de Radio Quito de hoy,0.8,240,si,
+Radio Atalaya (Guayaquil),medio,,,noticias y entrevistas de Radio Atalaya Guayaquil,0.8,240,si,
+Radio Caravana (Guayaquil),medio,,,noticias y entrevistas de Radio Caravana Guayaquil,0.8,240,si,
+Ecuavisa,medio,,,noticias de Ecuavisa de hoy,1.3,60,si,
+Teleamazonas,medio,,,noticias de Teleamazonas de hoy,1.3,60,si,
+TC Televisión,medio,,,noticias de TC Televisión de hoy,0.9,180,si,
+GK,medio,,,reportajes y noticias de GK Ecuador,1.1,180,si,
+Plan V (búsqueda),medio,,,investigaciones de Plan V Ecuador,1.1,240,si,
+Código Vidrio,medio,,,investigaciones de Código Vidrio Ecuador,1.1,360,si,
+4Pelagatos,medio,,,notas de 4Pelagatos Ecuador,1,240,si,
+La Posta,medio,,,noticias y programas de La Posta Ecuador,1,180,si,
+Ecuadorinmediato,medio,,,noticias de Ecuadorinmediato de hoy,0.9,180,si,
+Pichincha Comunicaciones,medio,,,noticias de Pichincha Comunicaciones de hoy,0.9,180,si,
+Milhojas,medio,,,investigaciones de Milhojas Ecuador,0.9,360,si,
+BN Periodismo (programa de la mañana),programa,,,"lo dicho hoy en el programa matutino de BN Periodismo en YouTube: entrevistas, declaraciones y temas",1.2,720,si,transcripción del programa de la mañana en YouTube
+Fabricio Vela · La Primera Plana,programa,,,lo dicho hoy en La Primera Plana con Fabricio Vela: entrevistas y declaraciones,1.2,720,si,revisar transcripción de la mañana
+Televistazo mediodía (Ecuavisa),programa,,,lo que informó hoy Televistazo de Ecuavisa en su emisión de mediodía,1.1,720,si,
+Televistazo noche (Ecuavisa),programa,,,lo que informó hoy Televistazo de Ecuavisa en su emisión de la noche,1.2,720,si,antes del newsletter PM
+24 Horas mediodía (Teleamazonas),programa,,,lo que informó hoy 24 Horas de Teleamazonas al mediodía,1.1,720,si,
+24 Horas noche (Teleamazonas),programa,,,lo que informó hoy 24 Horas de Teleamazonas en la noche,1.2,720,si,antes del newsletter PM
+Contacto Directo (Ecuavisa),programa,,,entrevista de hoy en Contacto Directo de Ecuavisa,1.2,720,si,
+Los Outsiders,programa,,,lo dicho hoy en el programa Los Outsiders,1,720,si,
+Daniel Noboa,politico,,,,1.5,,si,"presidente de la República, @DanielNoboaOk"
+María José Pinto,politico,,,,1,,si,vicepresidenta
+Niels Olsen,politico,,,,1.2,,si,"presidente de la Asamblea, ADN"
+Luisa González,politico,,,,1.3,,si,Revolución Ciudadana
+Rafael Correa,politico,,,,1.3,,si,"expresidente, Revolución Ciudadana, @MashiRafael"
+Andrés Arauz,politico,,,,0.9,,si,Revolución Ciudadana
+Paola Pabón,politico,,,,1,,si,"prefecta de Pichincha, Revolución Ciudadana"
+Aquiles Álvarez,politico,,,,1.1,,si,"alcalde de Guayaquil, Revolución Ciudadana"
+Pabel Muñoz,politico,,,,1,,si,"alcalde de Quito, Revolución Ciudadana"
+Marcela Aguiñaga,politico,,,,1,,si,"prefecta del Guayas, Revolución Ciudadana"
+Leonidas Iza,politico,,,,1.1,,si,"CONAIE, Pachakutik"
+Jaime Nebot,politico,,,,1,,si,"PSC, exalcalde de Guayaquil"
+Cynthia Viteri,politico,,,,0.9,,si,"PSC, exalcaldesa de Guayaquil"
+Guillermo Lasso,politico,,,,0.9,,si,expresidente
+Lenín Moreno,politico,,,,0.7,,si,expresidente
+Otto Sonnenholzner,politico,,,,1,,si,exvicepresidente
+Jan Topic,politico,,,,1,,si,excandidato presidencial
+Yaku Pérez,politico,,,,0.8,,si,excandidato presidencial
+Andrea González Náder,politico,,,,0.8,,si,excandidata a la vicepresidencia
+Verónica Abad,politico,,,,0.8,,si,exvicepresidenta
+Diana Salazar,politico,,,,0.9,,si,exfiscal general
+Jimmy Jairala,politico,,,,0.8,,si,político guayaquileño y comunicador
+Andersson Boscán,periodista,,,,1,,si,"periodista, Off the Record"
+Mónica Velásquez,periodista,,,,1,,si,"periodista, La Moni, Off the Record"
+Alondra Santiago,periodista,,,,1,,si,"periodista de opinión, oposición"
+Carlos Vera,periodista,,,,1,,si,periodista
+Martín Pallares,periodista,,,,1,,si,"periodista, 4Pelagatos"
+Roberto Aguilar,periodista,,,,0.9,,si,"columnista, Expreso"
+Lenin Artieda,periodista,,,,1,,si,"periodista, Ecuavisa"
+Alfonso Espinosa de los Monteros,periodista,,,,0.9,,si,"periodista, Ecuavisa"
+Andrés Carrión,periodista,,,,1,,si,"periodista, entrevistador"
+Gonzalo Rosero,periodista,,,,1,,si,"periodista, Radio Democracia"
+Diego Oquendo,periodista,,,,0.9,,si,"periodista, Radio Visión"
+Fabricio Vela,periodista,,,,1,,si,"periodista, La Primera Plana"
+Luis Eduardo Vivanco,periodista,,,,1,,si,"periodista, La Posta"
+Juan Carlos Calderón,periodista,,,,0.9,,si,"periodista, Plan V"
+Arturo Torres,periodista,,,,0.9,,si,"periodista, Código Vidrio"
+Periodistas de Radiocentro,periodista,,,,1,,si,conductores y reporteros del noticiero de Radiocentro (oficialista); completar nombres en el Sheet
+Felipe Rodríguez,sociedad_civil,,,,0.9,,si,articulista de prensa
+César Febres Cordero,sociedad_civil,,,,0.9,,si,articulista de prensa
+Dolores Miño,sociedad_civil,,,,0.9,,si,activista de derechos humanos
+Jorge Luis Masson,sociedad_civil,,,,0.8,,si,abogado con presencia pública
+Héctor Banegas,sociedad_civil,,,,0.9,,si,"abogado, coloca agenda política"
+Fundamedios,sociedad_civil,,,pronunciamientos de Fundamedios sobre libertad de expresión en Ecuador,0.9,360,si,
+Cámaras de la producción,sociedad_civil,,,"pronunciamientos de la Cámara de Comercio de Guayaquil, Cámara de Industrias y Producción y otras cámaras de Ecuador",1,240,si,
+CONAIE y movimientos sociales,sociedad_civil,,,"pronunciamientos y movilizaciones de la CONAIE, el FUT y movimientos sociales en Ecuador",1.1,120,si,
+Universidades y estudiantes,sociedad_civil,,,protestas y pronunciamientos de universidades y estudiantes en Ecuador,0.9,240,si,
+FMI sobre Ecuador,internacional,,,"FMI y Ecuador: desembolsos, revisiones del programa y proyecciones",1.3,240,si,
+Banco Mundial y BID sobre Ecuador,internacional,,,"Banco Mundial y BID: créditos, informes y proyecciones sobre Ecuador",1,360,si,
+Estados Unidos sobre Ecuador,internacional,,,"Gobierno, Departamento de Estado y Embajada de Estados Unidos sobre Ecuador",1.2,240,si,
+"ONU, CIDH y derechos humanos sobre Ecuador",internacional,,,"ONU, CIDH, Human Rights Watch y Amnistía Internacional sobre Ecuador",1,360,si,
+Calificadoras y riesgo país,internacional,,,"riesgo país de Ecuador, bonos y calificadoras (Fitch, Moody's, S&P)",1.2,240,si,
+Prensa internacional sobre Ecuador,internacional,,,"lo que Reuters, AFP, EFE, AP, Bloomberg, El País y The New York Times publican hoy sobre Ecuador",1.2,180,si,
+InSight Crime y expertos en seguridad,internacional,,,InSight Crime y expertos internacionales sobre crimen organizado en Ecuador,1,360,si,
+Países vecinos sobre Ecuador,internacional,,,"lo que dicen Colombia, Perú y otros gobiernos sobre Ecuador",1,360,si,
+Lo viral en redes (Ecuador),redes,,,"temas de interés público que se están volviendo virales hoy en redes sociales en Ecuador (X, TikTok, Instagram): política, economía, seguridad",1.2,60,si,"indicador de viralidad: si es de interés público, se vuelve nota"
+Tendencias de X en Ecuador,redes,,,"tendencias de X/Twitter en Ecuador hoy sobre política y gobierno, y qué las originó",1.1,60,si,
