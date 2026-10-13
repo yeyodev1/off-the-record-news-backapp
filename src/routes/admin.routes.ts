@@ -7,6 +7,7 @@ import * as articleController from "../controllers/article.controller";
 import * as subscriberController from "../controllers/subscriber.controller";
 import * as tipController from "../controllers/tip.controller";
 import * as modeController from "../controllers/mode.controller";
+import * as proController from "../controllers/pro.controller";
 
 const router = Router();
 
@@ -35,6 +36,14 @@ router.post("/articles/:id/image", uploadMiddleware.single("image"), articleCont
 router.get("/modes/stats", modeController.stats);
 router.get("/modes/golden", modeController.golden);
 
+// OTR PRO: tráileres de portada y empresas interesadas
+router.get("/pro/teasers", proController.adminTeasers);
+router.post("/pro/teasers/from-text", proController.teaserFromText);
+router.put("/pro/teasers/:id", proController.updateTeaser);
+router.delete("/pro/teasers/:id", proController.removeTeaser);
+router.get("/pro/leads", proController.adminLeads);
+router.put("/pro/leads/:id", proController.setLeadStatus);
+
 // Señales
 router.get("/signals", adminController.listSignals);
 router.post("/signals/:id/draft", adminController.draftSignal);
@@ -55,6 +64,7 @@ router.delete("/telegram/members/:id", adminController.removeTelegramMember);
 // Fuentes
 router.get("/sources", adminController.listSources);
 router.post("/sources", adminController.createSource);
+router.post("/sources/sync", adminController.syncSources);
 router.put("/sources/:id", adminController.updateSource);
 router.delete("/sources/:id", adminController.deleteSource);
 
