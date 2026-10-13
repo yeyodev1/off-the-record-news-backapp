@@ -6,6 +6,7 @@ import * as newsletterService from "../services/newsletter.service";
 import * as newsroomService from "../services/newsroom.service";
 import * as signalService from "../services/signal.service";
 import * as sourceService from "../services/source.service";
+import * as sourceSheetService from "../services/sourceSheet.service";
 import * as storyService from "../services/story.service";
 import * as telegramService from "../services/telegram.service";
 
@@ -235,6 +236,15 @@ export async function previewNewsletter(req: Request, res: Response, next: NextF
 export async function sendNewsletter(req: Request, res: Response, next: NextFunction) {
   try {
     res.status(200).json(await newsletterService.sendIssue(String(req.params.id)));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/sources/sync — trae ahora el Google Sheet de fuentes. */
+export async function syncSources(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await sourceSheetService.syncFromSheet());
   } catch (error) {
     next(error);
   }
