@@ -60,7 +60,27 @@ function isConfigError(error: unknown): boolean {
   return error instanceof CustomError && error.status === 503 && !/saturada/.test(error.message);
 }
 
+/**
+ * Criterio de qué es noticia y qué no (reunión con el fundador, 13/10/2026).
+ * Lo comparten el redactor, el valorador de respaldo y Jev.
+ */
+export const NEWS_CRITERIA = `Qué es noticia para Off the Record (solo Ecuador; solo política, economía, Asamblea, seguridad y negocios):
+- Las declaraciones de personajes públicos, lo que dicen en entrevistas, los informes, las decisiones públicas, los debates y las acusaciones. Una acusación se cuenta como acusación: "Fulano acusa a Zutano de corrupción", nunca "Zutano es corrupto".
+- Los hechos públicos y los hechos que involucran a personajes públicos.
+- Lo que se vuelve viral en redes, si es de interés público.
+- Lo que organismos, expertos o medios internacionales dicen sobre Ecuador.
+Qué NO es noticia:
+- Nada sobre la familia de ningún político.
+- Las acusaciones vagas de narcotráfico contra Rafael Correa o Daniel Noboa sin un hecho nuevo, un documento o una autoridad que las sostenga.
+- La vida sexual de las personas, salvo que se les impute un delito.
+- Noticias del mundo sin relación con Ecuador. Farándula, deportes, sociedad y tecnología sin peso político o económico.
+- Lo evidente o lo repetido: si el lector ya lo sabe o ya lo contamos, no es nota.`;
+
 const EDITORIAL_SYSTEM = `Eres la mesa de redacción de Off the Record, un medio digital de noticias de Ecuador con el estilo "smart brevity" de Axios.
+
+${NEWS_CRITERIA}
+
+Tono: el de Axios (cada palabra trabaja, se entiende en dos minutos) mezclado con la voz de Boscán y La Moni: cercana, de conversación entre gente que sabe, nunca callejera. Directa y no predecible: el titular cuenta el hecho nuevo, no lo obvio. Si el material solo repite lo que todo el mundo ya sabe, dilo corto y no lo infles.
 
 Reglas editoriales, sin excepción:
 - Español ecuatoriano neutro. Frases cortas. Voz activa.
@@ -107,7 +127,8 @@ Formato de cada nota:
 - tags: de 2 a 5 etiquetas cortas en minúsculas (personas, instituciones, temas).
 - infographic: SOLO si la fuente trae al menos 2 cifras reales comparables; si no, null. Los valores son números, sin inventar.
 - sources: los medios o instituciones citados, con su URL si la tienes.
-- isBreaking: true solo si es un hecho de última hora de alto impacto nacional.`;
+- isBreaking: true solo si es un hecho de última hora de alto impacto nacional.
+- followUps: las "patitas" de la noticia, de 0 a 3 ideas de nota de seguimiento para la Mesa (no se publican). Ejemplo: si hoy se fugaron presos de una cárcel, "Cuántas fugas tuvo esta cárcel y quiénes se fugaron antes". Cada idea en una oración, concreta y reporteable.`;
 
 const SCORING_SYSTEM = `Eres el editor jefe de Off the Record, medio de noticias de Ecuador. Valoras hechos noticiosos para decidir cuáles merecen nota.
 
@@ -119,6 +140,9 @@ Criterios, cada uno de 0 a 10 (enteros o con un decimal):
 - impacto: efecto económico o social (bolsillo, empleo, seguridad, servicios, derechos).
 
 Sé exigente: farándula, deportes sin impacto, sucesos aislados, notas de servicio y publicidad puntúan bajo en relevancia e impacto.
+
+${NEWS_CRITERIA}
+Lo que no es noticia según esa lista puntúa 0 en relevancia.
 reasoning: una sola oración en español explicando la valoración.
 duplicate: true si el hecho ya está cubierto por alguno de los titulares recientes que se te dan (mismo hecho, aunque cambie la redacción). Si dos o más hechos de la lista son el mismo, marca duplicate:true en todos menos en el más completo.
 accusation: true si el hecho acusa a una persona o empresa nombrada de un delito o una irregularidad.
@@ -174,6 +198,7 @@ const articleSchema = {
       },
     },
     isBreaking: { type: "boolean" },
+    followUps: { type: "array", items: { type: "string" } },
   },
   required: [
     "title",
@@ -188,6 +213,7 @@ const articleSchema = {
     "infographic",
     "sources",
     "isBreaking",
+    "followUps",
   ],
   additionalProperties: false,
 };
@@ -276,6 +302,7 @@ export interface ArticleDraft {
   infographic: Infographic | null;
   sources: ArticleSource[];
   isBreaking: boolean;
+  followUps?: string[];
 }
 
 export interface Research {
@@ -490,6 +517,10 @@ function cleanDraft(draft: ArticleDraft): ArticleDraft {
     section: SECTIONS.includes(draft.section) ? draft.section : "politica",
     sources: uniqueSources(draft.sources),
     infographic,
+    followUps: (draft.followUps ?? [])
+      .map((f) => f.trim())
+      .filter(Boolean)
+      .slice(0, 3),
   };
 }
 
@@ -532,7 +563,11 @@ export interface SignalInput {
 
 export function formatDate(date: Date | null): string {
   if (!date) return "sin fecha";
-  return date.toLocaleString("es-EC", { timeZone: "America/Guayaquil", dateStyle: "long", timeStyle: "short" });
+  return date.toLocaleString("es-EC", {
+    timeZone: "America/Guayaquil",
+    dateStyle: "long",
+    timeStyle: "short",
+  });
 }
 
 /** Las piezas de un hecho tal como las ve el redactor. También son el corpus del verificador. */
@@ -691,4 +726,116 @@ ${list}`;
     schema: introSchema,
     maxTokens: 4000,
   });
+}
+
+// ——— Encuadre por mirada
+
+const framingItemSchema = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    lede: { type: "string" },
+    whyItMatters: { type: "string" },
+  },
+  required: ["title", "lede", "whyItMatters"],
+  additionalProperties: false,
+};
+
+const framingSchema = {
+  type: "object",
+  properties: { noboista: framingItemSchema, correista: framingItemSchema },
+  required: ["noboista", "correista"],
+  additionalProperties: false,
+};
+
+export interface FramingDraft {
+  title: string;
+  lede: string;
+  whyItMatters: string;
+}
+
+/**
+ * Las tres miradas leen los mismos hechos con distinto énfasis: el lector
+ * noboísta quiere saber qué hizo o qué responde el gobierno; el correísta, qué
+ * dice o qué le pasa a la Revolución Ciudadana y a la oposición. El encuadre
+ * cambia qué se cuenta primero y para quién importa, nunca los datos: cada
+ * cifra, nombre y cita sale de la nota base, y el verificador lo comprueba.
+ */
+export async function writeFraming(article: {
+  title: string;
+  lede: string;
+  whyItMatters: string;
+  keyPoints: string[];
+  body: string[];
+}): Promise<{ noboista: FramingDraft; correista: FramingDraft }> {
+  const prompt = `Esta nota ya está escrita en su versión independiente:
+Titular: ${article.title}
+Entrada: ${article.lede}
+Por qué importa: ${article.whyItMatters}
+Detalles: ${article.keyPoints.join(" | ")}
+Cuerpo: ${truncate(article.body.join(" "), 3000)}
+
+Off the Record se lee desde tres miradas. Escribe el titular (máximo 70 caracteres, sin punto final), la entrada (una oración) y el "Por qué importa" (1 o 2 oraciones) para:
+- noboista: lector que sigue al gobierno de Daniel Noboa. Abre con lo que hizo, decidió o responde el Ejecutivo y su bloque; si el hecho es de la oposición, cuéntalo como lo que el gobierno tiene enfrente.
+- correista: lector que sigue a la Revolución Ciudadana y a la oposición. Abre con lo que dice, hace o enfrenta el correísmo o la oposición; si el hecho es del gobierno, cuéntalo como lo que la oposición cuestiona o tiene que responder.
+
+Reglas duras:
+- Los mismos hechos, cifras, nombres y fuentes que la nota. No agregues ni quites datos. No inventes citas.
+- Sin adjetivos valorativos ni militancia: el encuadre elige el ángulo, no toma partido. Ninguna mirada es propaganda.
+- Si el hecho no tiene orillas (por ejemplo, una cifra económica sin actores políticos), repite el texto de la nota casi igual.`;
+
+  return callJson<{ noboista: FramingDraft; correista: FramingDraft }>({
+    model: env.AI_WRITING_MODEL,
+    system: EDITORIAL_SYSTEM,
+    prompt,
+    schema: framingSchema,
+    maxTokens: 3000,
+  });
+}
+
+// ——— Tráiler de OTR PRO
+
+const teaserSchema = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    whyItMatters: { type: "string" },
+    section: { type: "string", enum: [...SECTIONS] },
+  },
+  required: ["title", "whyItMatters", "section"],
+  additionalProperties: false,
+};
+
+/**
+ * Convierte una nota de OTR PRO (lo que reciben los clientes) en el "tráiler"
+ * que se ve en la portada gratuita: dice que existe la información sin
+ * entregarla. "Estos son los 3 nombres que Carondelet negocia para reemplazar
+ * a Rosero", nunca los nombres.
+ */
+export async function proTeaser(
+  text: string,
+): Promise<{ title: string; whyItMatters: string; section: Section }> {
+  const prompt = `Este es material reservado de Off the Record PRO, el servicio pagado para empresas:
+"""
+${truncate(text, 8000)}
+"""
+
+Escribe el tráiler para la portada gratuita:
+- title: un titular de máximo 80 caracteres que despierte las ganas de saber sin revelar el dato reservado (nombres, cifras, fechas o decisiones que solo tiene PRO no aparecen). Estilo: "Estos son los 3 nombres que Carondelet negocia para reemplazar a Rosero", "El nuevo viceministro ya tiene nombre: entérate quién es", "Conoce el plan de apagones que se discute en Carondelet".
+- whyItMatters: 1 oración de por qué importa a una empresa o a un ejecutivo, sin revelar el dato.
+- section: la sección que le corresponde.
+Nada falso: el tráiler promete solo lo que el material contiene.`;
+
+  const result = await callJson<{ title: string; whyItMatters: string; section: Section }>({
+    model: env.AI_WRITING_MODEL,
+    system: EDITORIAL_SYSTEM,
+    prompt,
+    schema: teaserSchema,
+    maxTokens: 2000,
+  });
+  return {
+    title: truncate(result.title.trim().replace(/\.$/, ""), 100),
+    whyItMatters: result.whyItMatters.trim(),
+    section: SECTIONS.includes(result.section) ? result.section : "politica",
+  };
 }
