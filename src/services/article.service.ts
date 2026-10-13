@@ -24,8 +24,16 @@ import { ArticleDraft } from "./anthropic.service";
 import * as cloudinaryService from "./cloudinary.service";
 import * as rssService from "./rss.service";
 import { mapLimit, normalizeUrl, stripHtml, truncate } from "../utils/text";
-import { DECAY_PER_HOUR, isWeighted, oppositeOf, ReadingMode, Stance, STANCES } from "../config/modes";
+import {
+  DECAY_PER_HOUR,
+  isWeighted,
+  oppositeOf,
+  ReadingMode,
+  Stance,
+  STANCES,
+} from "../config/modes";
 import * as lensService from "./lens.service";
+import * as framingService from "./framing.service";
 
 type ArticleJSON = Record<string, unknown> & { id: string };
 
@@ -40,12 +48,14 @@ const PRIVATE_FIELDS = [
   "modeRelevanceAuto",
   "modeRelevanceEditedBy",
   "viewsByMode",
+  "framing",
+  "followUps",
 ] as const;
-const CARD_SELECT = "-body -score -verification -history -updates -viewsByMode";
+const CARD_SELECT = "-body -score -verification -history -updates -viewsByMode -followUps";
 
-/** Tarjeta pública: sin body, score ni status. */
-export function toCard(doc: any): ArticleJSON {
-  const json = doc.toJSON();
+/** Tarjeta pública: sin body, score ni status, con el encuadre del modo del lector. */
+export function toCard(doc: any, mode: ReadingMode | null = null): ArticleJSON {
+  const json = framingService.applyFraming(doc.toJSON(), mode) as ArticleJSON;
   delete json.body;
   delete json.status;
   for (const key of PRIVATE_FIELDS) delete json[key];
@@ -125,7 +135,8 @@ function pickEditable(body: Record<string, unknown>): Partial<IArticle> {
     }
   }
   if (out.sources !== undefined) {
-    if (!Array.isArray(out.sources)) throw new CustomError("El campo sources debe ser una lista", 400);
+    if (!Array.isArray(out.sources))
+      throw new CustomError("El campo sources debe ser una lista", 400);
     // Una postura desconocida queda "sin valorar" en vez de tumbar el guardado.
     out.sources = (out.sources as ArticleSource[]).map((source) => ({
       ...source,
@@ -176,13 +187,14 @@ const CARD_PROJECT = {
   updates: 0,
   viewsByMode: 0,
   evidence: 0,
+  followUps: 0,
   _rank: 0,
 };
 
 async function rankedCards(
   filter: Record<string, unknown>,
   mode: ReadingMode,
-  opts: { skip?: number; limit: number },
+  opts: { skip?: number; limit: number; frameMode?: ReadingMode },
 ) {
   const docs = await Article.aggregate([
     { $match: filter },
@@ -191,8 +203,17 @@ async function rankedCards(
     { $limit: opts.limit },
     { $project: CARD_PROJECT },
   ]);
-  return docs.map((raw) => toCard(Article.hydrate(raw)));
+  return docs.map((raw) => toCard(Article.hydrate(raw), opts.frameMode ?? mode));
 }
+
+/**
+ * Orden del stream de la portada: "principales" es el orden editorial del modo
+ * (relevancia menos antigüedad, también en independiente), "leidas" lo más visto
+ * de los últimos tres días y "ultimo" la cronología pura, igual para todos.
+ */
+export const STREAM_ORDERS = ["principales", "leidas", "ultimo"] as const;
+export type StreamOrder = (typeof STREAM_ORDERS)[number];
+const POPULAR_WINDOW_MS = 72 * 3600_000;
 
 export async function listPublished(query: {
   section?: string;
@@ -200,23 +221,37 @@ export async function listPublished(query: {
   page?: unknown;
   limit?: unknown;
   mode?: ReadingMode | null;
+  order?: string;
 }) {
+  const mode = query.mode ?? null;
   const filter: Record<string, unknown> = { status: "published" };
   if (query.section) filter.section = query.section;
   if (query.tag) filter.tags = String(query.tag).toLowerCase();
-  if (isWeighted(query.mode ?? null)) {
+  const order = STREAM_ORDERS.includes(query.order as StreamOrder)
+    ? (query.order as StreamOrder)
+    : null;
+
+  if (order === "principales" || (!order && isWeighted(mode))) {
     const { page, limit, skip } = pageParams(query.page, query.limit, 20);
     const [items, total] = await Promise.all([
-      rankedCards(filter, query.mode!, { skip, limit }),
+      rankedCards(filter, mode ?? "independiente", { skip, limit }),
       Article.countDocuments(filter),
     ]);
     return { items, total, page, pages: Math.max(1, Math.ceil(total / limit)) };
   }
+  if (order === "leidas") {
+    filter.publishedAt = { $gte: new Date(Date.now() - POPULAR_WINDOW_MS) };
+  }
   return paginate(
     Article,
     filter,
-    { page: query.page, limit: query.limit, sort: { publishedAt: -1 }, select: CARD_SELECT },
-    toCard,
+    {
+      page: query.page,
+      limit: query.limit,
+      sort: order === "leidas" ? { views: -1, publishedAt: -1 } : { publishedAt: -1 },
+      select: CARD_SELECT,
+    },
+    (doc: any) => toCard(doc, mode),
   );
 }
 
@@ -238,61 +273,45 @@ export async function getTop(mode: ReadingMode | null = null) {
   ]);
 
   const lead = leadByScore ?? latest[0] ?? null;
+  const card = (doc: any) => toCard(doc, mode);
 
-  // La historia del día, lo último y la última hora son iguales en todos los
-  // modos: el modo solo reordena el resto.
-  const bySection = (
-    await Promise.all(
-      SECTIONS.map(async (section) => ({
-        section,
-        items: isWeighted(mode)
-          ? await rankedCards({ status: "published", section }, mode, { limit: 4 })
-          : (
-              await Article.find({ status: "published", section })
-                .sort({ publishedAt: -1 })
-                .limit(4)
-                .select(cardFields)
-            ).map(toCard),
-      })),
-    )
-  ).filter((group) => group.items.length > 0);
+  // "Las 5 cosas que tienes que saber": la historia del día va primera en todos
+  // los modos (es la plaza pública); las otras cuatro salen del orden del modo.
+  const rest = await rankedCards(
+    {
+      status: "published",
+      publishedAt: { $gte: new Date(now - TOP_FIVE_WINDOW_MS) },
+      ...(lead ? { _id: { $ne: lead._id } } : {}),
+    },
+    mode ?? "independiente",
+    { limit: 4 },
+  );
 
   return {
     modo: mode ?? "independiente",
-    lead: lead ? toCard(lead) : null,
-    breaking: breaking.map(toCard),
-    latest: latest.map(toCard),
-    bySection,
+    lead: lead ? card(lead) : null,
+    topFive: [...(lead ? [card(lead)] : []), ...rest],
+    breaking: breaking.map(card),
+    latest: latest.map(card),
     ...(await modeBlocks(mode, lead?._id ?? null)),
   };
 }
 
+const TOP_FIVE_WINDOW_MS = 36 * 3600_000;
+
 const MODE_WINDOW_MS = 48 * 3600_000;
 
-/** Bloques que dependen del modo. Nada se oculta: son notas que también están en su sección. */
+/**
+ * "Lo que tu orilla no está mirando". Nada se oculta: son notas que también
+ * están en su sección. El encuadre es el del modo del lector, no el de la otra orilla.
+ */
 async function modeBlocks(mode: ReadingMode | null, leadId: unknown) {
-  const empty = { forMode: [], contradictions: [], otherSide: [] };
-  if (!isWeighted(mode)) return empty;
+  if (!isWeighted(mode)) return { otherSide: [] };
   const recent: Record<string, unknown> = {
     status: "published",
     publishedAt: { $gte: new Date(Date.now() - MODE_WINDOW_MS) },
     ...(leadId ? { _id: { $ne: leadId } } : {}),
   };
-
-  const forMode = await rankedCards(recent, mode, { limit: 5 });
-
-  const contradictions =
-    mode === "anti_ambos"
-      ? await rankedCards(
-          {
-            status: "published",
-            "lens.contradiccion": true,
-            publishedAt: { $gte: new Date(Date.now() - 14 * 24 * 3600_000) },
-          },
-          mode,
-          { limit: 4 },
-        )
-      : [];
 
   // Alta en la orilla contraria y baja en la propia.
   const opposite = oppositeOf(mode);
@@ -302,18 +321,15 @@ async function modeBlocks(mode: ReadingMode | null, leadId: unknown) {
           ...recent,
           [`modeRelevance.${opposite}`]: { $gte: 70 },
           $expr: {
-            $gte: [
-              { $subtract: [`$modeRelevance.${opposite}`, `$modeRelevance.${mode}`] },
-              15,
-            ],
+            $gte: [{ $subtract: [`$modeRelevance.${opposite}`, `$modeRelevance.${mode}`] }, 15],
           },
         },
         opposite,
-        { limit: 4 },
+        { limit: 4, frameMode: mode },
       )
     : [];
 
-  return { forMode, contradictions, otherSide };
+  return { otherSide };
 }
 
 export async function getPublicBySlug(slug: string, mode: ReadingMode | null = null) {
@@ -338,7 +354,7 @@ export async function getPublicBySlug(slug: string, mode: ReadingMode | null = n
       retraction: { at: doc.retraction?.at ?? null, reason: doc.retraction?.reason ?? "" },
     };
   }
-  const json = doc.toJSON();
+  const json = framingService.applyFraming(doc.toJSON(), mode);
   for (const key of PRIVATE_FIELDS) delete json[key];
   json.updates = (json.updates ?? [])
     .filter((u: any) => u.status === "published")
@@ -480,6 +496,9 @@ export async function createFromDraft(
     publishedAt: status === "published" ? new Date() : null,
   });
   await lensService.assessDoc(doc);
+  // Las que quedan por aprobar se encuadran al publicarse (cron), para no
+  // gastar en notas que la Mesa puede rechazar.
+  if (status === "published") await framingService.frameDoc(doc);
   await doc.save();
   return doc;
 }
@@ -515,7 +534,15 @@ export async function update(id: string, body: Record<string, unknown>, by = "")
   if (data.title !== undefined && !String(data.title).trim()) {
     throw new CustomError("El titular no puede quedar vacío", 400);
   }
+  const reframe = ["title", "lede", "whyItMatters", "keyPoints", "body"].some(
+    (k) => (data as Record<string, unknown>)[k] !== undefined,
+  );
   doc.set(data);
+  // El encuadre se armó con el texto anterior: el cron lo rehace con el nuevo.
+  if (reframe) doc.framing = null;
+  if (body.followUps !== undefined && Array.isArray(body.followUps)) {
+    doc.followUps = (body.followUps as unknown[]).map(String).filter(Boolean).slice(0, 5);
+  }
   if (body.modeRelevance !== undefined) lensService.setManualRelevance(doc, body.modeRelevance, by);
   if (body.status !== undefined) {
     if (!ARTICLE_STATUSES.includes(body.status as ArticleStatus))
@@ -533,7 +560,10 @@ export async function update(id: string, body: Record<string, unknown>, by = "")
 export async function publish(id: string, by = "") {
   const doc = await getDoc(id);
   if (doc.status === "retracted") {
-    throw new CustomError("La nota fue retirada; edítala y vuelve a publicarla desde el editor", 409);
+    throw new CustomError(
+      "La nota fue retirada; edítala y vuelve a publicarla desde el editor",
+      409,
+    );
   }
   doc.status = "published";
   doc.publishedAt = doc.publishedAt ?? new Date();
@@ -548,7 +578,8 @@ export async function reject(id: string, by = "") {
   doc.status = "rejected";
   doc.history.push(historyEntry("rechazar", by));
   await doc.save();
-  if (doc.storyId) await Story.updateOne({ _id: doc.storyId }, { reason: "Nota rechazada por la Mesa" });
+  if (doc.storyId)
+    await Story.updateOne({ _id: doc.storyId }, { reason: "Nota rechazada por la Mesa" });
   return doc.toJSON();
 }
 
@@ -575,24 +606,22 @@ export async function retract(id: string, by = "", reason = "") {
 /** "Esperar más fuentes": la nota no sale y el hecho vuelve a la watchlist. */
 export async function wait(id: string, by = "") {
   const doc = await getDoc(id);
-  if (doc.status !== "pending") throw new CustomError("Solo se puede esperar una nota por aprobar", 409);
+  if (doc.status !== "pending")
+    throw new CustomError("Solo se puede esperar una nota por aprobar", 409);
   doc.status = "rejected";
   doc.history.push(historyEntry("esperar", by));
   await doc.save();
   if (doc.storyId) {
-    await Story.updateOne(
-      { _id: doc.storyId },
-      [
-        {
-          $set: {
-            articleId: null,
-            status: "watchlist",
-            holdUntilCount: "$signalCount",
-            reason: "La Mesa pidió esperar más fuentes",
-          },
+    await Story.updateOne({ _id: doc.storyId }, [
+      {
+        $set: {
+          articleId: null,
+          status: "watchlist",
+          holdUntilCount: "$signalCount",
+          reason: "La Mesa pidió esperar más fuentes",
         },
-      ],
-    );
+      },
+    ]);
   }
   return doc.toJSON();
 }
@@ -601,7 +630,12 @@ export async function wait(id: string, by = "") {
 
 export async function addUpdate(
   doc: any,
-  data: { text: string; sources: ArticleSource[]; evidence: Evidence; signalId?: Types.ObjectId | null },
+  data: {
+    text: string;
+    sources: ArticleSource[];
+    evidence: Evidence;
+    signalId?: Types.ObjectId | null;
+  },
 ) {
   const verification = verifierService.verifyText(data.text, data.evidence);
   const publishNow = env.AUTO_PUBLISH_UPDATES && verification.errors === 0;
@@ -617,7 +651,9 @@ export async function addUpdate(
   });
   const update = doc.updates[doc.updates.length - 1];
   if (publishNow) applyPublishedUpdate(doc, update);
-  doc.history.push(historyEntry("proponer_actualizacion", "Mesa automática", truncate(data.text, 120)));
+  doc.history.push(
+    historyEntry("proponer_actualizacion", "Mesa automática", truncate(data.text, 120)),
+  );
   await doc.save();
   return update;
 }
@@ -660,7 +696,10 @@ export async function rejectUpdate(id: string, updateId: string, by = "") {
 
 /** Para Telegram: acepta id, slug o la URL pública de la nota. */
 export async function resolve(ref: string) {
-  const clean = ref.trim().replace(/^.*\/nota\//, "").replace(/[?#].*$/, "");
+  const clean = ref
+    .trim()
+    .replace(/^.*\/nota\//, "")
+    .replace(/[?#].*$/, "");
   if (isValidObjectId(clean)) {
     const byId = await Article.findById(clean);
     if (byId) return byId;
@@ -695,6 +734,7 @@ export async function rewrite(id: string, instructions: string, by = "") {
     tags: draft.tags,
     infographic: draft.infographic,
     sources: draft.sources.length ? draft.sources : doc.sources,
+    followUps: draft.followUps?.length ? draft.followUps : doc.followUps,
   });
   // La instrucción del editor es material humano: si trae una cifra nueva, vale como fuente.
   if (doc.evidence) {
@@ -705,6 +745,8 @@ export async function rewrite(id: string, instructions: string, by = "") {
   }
   reverify(doc);
   await lensService.assessDoc(doc);
+  doc.framing = null;
+  if (doc.status === "published") await framingService.frameDoc(doc);
   doc.history.push(historyEntry("regenerar", by, instructions.trim()));
   await doc.save();
   return doc.toJSON();
