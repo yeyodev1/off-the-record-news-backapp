@@ -71,13 +71,18 @@ function renderHtml(edition: Edition, intro: string, articles: any[]): string {
 }
 
 /**
- * El primer ítem (la historia del día) es igual para todos; el resto se ordena
- * por la relevancia del modo. Los textos no cambian.
+ * El primer ítem (la historia del día) es el mismo hecho para todos; el resto se
+ * ordena por la relevancia del modo, con el encuadre de esa mirada.
  */
 function orderFor(mode: ReadingMode, articles: any[]): any[] {
   const [first, ...rest] = articles;
   const value = (a: any) => a.modeRelevance?.[mode] ?? (a.score?.total ?? 5) * 10;
-  return [first, ...rest.sort((a, b) => value(b) - value(a))];
+  // Cada nota llega con el titular y la entrada de la mirada del suscriptor.
+  const framed = (a: any) => ({
+    ...a.toObject(),
+    ...(a.framing?.[mode]?.title ? (a.framing[mode].toObject?.() ?? a.framing[mode]) : {}),
+  });
+  return [first, ...rest.sort((a, b) => value(b) - value(a))].map(framed);
 }
 
 export async function buildIssue(edition: Edition) {
