@@ -1,8 +1,18 @@
 import { isValidObjectId } from "mongoose";
 import { CustomError } from "../errors/customError.error";
-import { Source, SOURCE_CATEGORIES, SOURCE_KINDS } from "../models/source.model";
+import { PEOPLE_CATEGORIES, Source, SOURCE_CATEGORIES, SOURCE_KINDS } from "../models/source.model";
 
-const EDITABLE = ["name", "kind", "category", "url", "query", "weight", "isActive"] as const;
+const EDITABLE = [
+  "name",
+  "kind",
+  "category",
+  "url",
+  "query",
+  "weight",
+  "isActive",
+  "everyMinutes",
+  "notes",
+] as const;
 
 function pick(body: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
@@ -18,12 +28,23 @@ function pick(body: Record<string, unknown>) {
       throw new CustomError("El peso debe estar entre 0.5 y 2", 400);
     out.weight = w;
   }
+  if (out.everyMinutes !== undefined) {
+    const m = Math.round(Number(out.everyMinutes));
+    if (!Number.isFinite(m) || m < 0)
+      throw new CustomError("La frecuencia debe ser 0 o más minutos", 400);
+    out.everyMinutes = m;
+  }
   return out;
+}
+
+/** Una persona sin consulta propia se busca por su nombre y sus notas, en grupo. */
+export function isPerson(data: Record<string, unknown>) {
+  return PEOPLE_CATEGORIES.includes(data.category as any) && !String(data.query ?? "").trim();
 }
 
 function validate(data: Record<string, unknown>) {
   if (!String(data.name ?? "").trim()) throw new CustomError("El nombre es obligatorio", 400);
-  if (data.kind === "perplexity" && !String(data.query ?? "").trim()) {
+  if (data.kind === "perplexity" && !String(data.query ?? "").trim() && !isPerson(data)) {
     throw new CustomError("Las fuentes de Perplexity necesitan una consulta", 400);
   }
   if (data.kind !== "perplexity" && !/^https?:\/\//.test(String(data.url ?? ""))) {
