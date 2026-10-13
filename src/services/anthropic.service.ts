@@ -8,6 +8,7 @@ import {
   Section,
   SECTIONS,
   SECTION_NAMES,
+  COVERED_SECTIONS,
 } from "../models/article.model";
 import { Edition } from "../models/subscriber.model";
 import { truncate } from "../utils/text";
@@ -123,11 +124,12 @@ Formato de cada nota:
 - body: "Profundiza", de 2 a 5 párrafos cortos (máximo 3 oraciones cada uno) con contexto verificable.
 - bigPicture: "El panorama", 1 oración de contexto, o "" si no hay sustento.
 - whatsNext: "Qué sigue", 1 oración con el próximo paso conocido, o "" si no se sabe.
-- section: una de ${SECTIONS.map((s) => `${s} (${SECTION_NAMES[s]})`).join(", ")}.
+- section: una de ${COVERED_SECTIONS.map((s) => `${s} (${SECTION_NAMES[s]})`).join(", ")}. Off the Record solo cubre esas cinco.
 - tags: de 2 a 5 etiquetas cortas en minúsculas (personas, instituciones, temas).
 - infographic: SOLO si la fuente trae al menos 2 cifras reales comparables; si no, null. Los valores son números, sin inventar.
 - sources: los medios o instituciones citados, con su URL si la tienes.
 - isBreaking: true solo si es un hecho de última hora de alto impacto nacional.
+- sinHecho: true si el material no trae un hecho concreto que contar (solo el nombre de un programa, noticiero o transmisión, una portada, un listado, un texto sin datos). En ese caso no escribas una nota sobre la falta de información: deja el resto vacío y la Mesa la descarta.
 - followUps: las "patitas" de la noticia, de 0 a 3 ideas de nota de seguimiento para la Mesa (no se publican). Ejemplo: si hoy se fugaron presos de una cárcel, "Cuántas fugas tuvo esta cárcel y quiénes se fugaron antes". Cada idea en una oración, concreta y reporteable.`;
 
 const SCORING_SYSTEM = `Eres el editor jefe de Off the Record, medio de noticias de Ecuador. Valoras hechos noticiosos para decidir cuáles merecen nota.
@@ -185,7 +187,7 @@ const articleSchema = {
     body: { type: "array", items: { type: "string" } },
     bigPicture: { type: "string" },
     whatsNext: { type: "string" },
-    section: { type: "string", enum: [...SECTIONS] },
+    section: { type: "string", enum: [...COVERED_SECTIONS] },
     tags: { type: "array", items: { type: "string" } },
     infographic: infographicSchema,
     sources: {
@@ -199,6 +201,7 @@ const articleSchema = {
     },
     isBreaking: { type: "boolean" },
     followUps: { type: "array", items: { type: "string" } },
+    sinHecho: { type: "boolean" },
   },
   required: [
     "title",
@@ -214,6 +217,7 @@ const articleSchema = {
     "sources",
     "isBreaking",
     "followUps",
+    "sinHecho",
   ],
   additionalProperties: false,
 };
@@ -303,6 +307,8 @@ export interface ArticleDraft {
   sources: ArticleSource[];
   isBreaking: boolean;
   followUps?: string[];
+  /** El material no traía un hecho: no hay nota. */
+  sinHecho?: boolean;
 }
 
 export interface Research {
@@ -514,7 +520,7 @@ function cleanDraft(draft: ArticleDraft): ArticleDraft {
     keyPoints: draft.keyPoints.filter(Boolean).slice(0, 4),
     body: draft.body.filter(Boolean),
     tags: [...new Set(draft.tags.map((t) => t.toLowerCase().trim()).filter(Boolean))].slice(0, 5),
-    section: SECTIONS.includes(draft.section) ? draft.section : "politica",
+    section: COVERED_SECTIONS.includes(draft.section) ? draft.section : "politica",
     sources: uniqueSources(draft.sources),
     infographic,
     followUps: (draft.followUps ?? [])
@@ -542,6 +548,15 @@ function uniqueSources(sources: ArticleSource[]): ArticleSource[] {
     .slice(0, 6);
 }
 
+/** El redactor dijo que no hay hecho, o devolvió un titular que lo admite. */
+export function isEmptyDraft(draft: ArticleDraft): boolean {
+  return (
+    !!draft.sinHecho ||
+    !draft.title.trim() ||
+    /sin (hecho|informaci[oó]n|datos)|no (hay|contiene|incluye) (un )?hecho/i.test(draft.title)
+  );
+}
+
 async function draftFrom(prompt: string): Promise<ArticleDraft> {
   const draft = await callJson<ArticleDraft>({
     model: env.AI_WRITING_MODEL,
@@ -550,6 +565,7 @@ async function draftFrom(prompt: string): Promise<ArticleDraft> {
     schema: articleSchema,
     maxTokens: 16000,
   });
+  if (isEmptyDraft(draft)) return { ...draft, sinHecho: true };
   return cleanDraft(draft);
 }
 
