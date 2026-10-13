@@ -55,7 +55,18 @@ const QUESTIONS: Record<string, JevQuestion> = {
       "¿El hecho trata sobre un familiar (madre, padre, hijos, pareja, hermanos, primos, tíos) del presidente de Ecuador, de un expresidente o de los alcaldes de Quito o Guayaquil?",
     criteria: {
       true: "el foco es el familiar o una denuncia que lo toca, y el familiar no es quien ejecutó el acto",
-      false: "no involucra familiares de esas autoridades, o el familiar es el actor directo del hecho (firmó, decidió, contrató)",
+      false:
+        "no involucra familiares de esas autoridades, o el familiar es el actor directo del hecho (firmó, decidió, contrató)",
+    },
+  },
+  vetado: {
+    type: "boolean",
+    instructions:
+      "¿El hecho es de los que Off the Record no cubre? Acusaciones vagas de narcotráfico contra Rafael Correa o Daniel Noboa sin un hecho, documento o autoridad nueva que las sostenga; la vida sexual de alguien sin imputación de un delito; chismes sobre la vida privada de políticos.",
+    criteria: {
+      true: "el foco es una acusación vaga de narco contra Correa o Noboa, la vida sexual o la vida privada de una persona sin delito imputado",
+      false:
+        "hecho de interés público con sustento: declaración, decisión, informe, acusación concreta o hecho verificable",
     },
   },
   duplicado: {
@@ -120,10 +131,13 @@ const QUESTIONS: Record<string, JevQuestion> = {
       economia: "economía nacional, precios, empleo, deuda, tarifas, petróleo",
       legislativo: "Asamblea Nacional, leyes, juicios políticos",
       seguridad: "crimen, violencia, cárceles, policía, justicia penal",
-      sociedad: "salud, educación, clima, servicios, sucesos, comunidad",
-      mundo: "hechos internacionales",
+      sociedad:
+        "sucesos, clima y temas de comunidad sin una decisión pública detrás (si hay una decisión del gobierno, un ministerio o la Asamblea sobre salud, educación o servicios, va en política)",
+      mundo:
+        "hechos internacionales sin relación con Ecuador (si un país, organismo o medio extranjero habla de Ecuador, va en política o economía)",
       negocios: "empresas, mercados, inversión, emprendimiento",
-      tecnologia: "tecnología, telecomunicaciones, ciencia",
+      tecnologia:
+        "tecnología y ciencia sin efecto en empresas ni en la política (si toca a empresas o mercados, va en negocios)",
     },
   },
 };
@@ -174,7 +188,7 @@ async function scoreOne(signal: SignalForScoring, headlines: string[]): Promise<
     ref: signal.ref,
     duplicate,
     section,
-    notNews: noticia < 0.5 || vigente < 0.5,
+    notNews: noticia < 0.5 || vigente < 0.5 || prob(answers.vetado) >= 0.5,
     accusation: prob(answers.acusacion) >= 0.5,
     familyVeto: prob(answers.familia) >= 0.5,
     score: {
@@ -290,7 +304,8 @@ export async function bringsNewFacts(
     {
       nuevo: {
         type: "boolean",
-        instructions: "¿La pieza nueva trae un dato o desarrollo que la nota publicada todavía no cuenta?",
+        instructions:
+          "¿La pieza nueva trae un dato o desarrollo que la nota publicada todavía no cuenta?",
         criteria: {
           true: "respuesta del aludido, cifra oficial, decisión, detención, votación u otro hecho posterior",
           false: "repite lo que la nota ya dice con otras palabras",
