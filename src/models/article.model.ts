@@ -55,6 +55,15 @@ export type ArticleOrigin = (typeof ARTICLE_ORIGINS)[number];
 
 export const IMAGE_KINDS = ["photo", "illustration", "infographic"] as const;
 
+/**
+ * Lenguaje visual de la imagen (OTR-especificacion-tres-lenguajes-visuales):
+ * documental = el instante del hecho; archivo = foto real de los actores pero no
+ * de este hecho; grafico = cifras o un documento; generica = no aporta (fachada,
+ * hemiciclo vacío, logo, banco de imágenes) y no se muestra.
+ */
+export const IMAGE_EDITORIAL = ["documental", "archivo", "grafico", "generica"] as const;
+export type ImageEditorial = (typeof IMAGE_EDITORIAL)[number];
+
 export interface ScoreBreakdown {
   total: number;
   cercania: number;
@@ -71,6 +80,12 @@ export interface ArticleImage {
   sourceName: string;
   sourceUrl: string;
   kind: (typeof IMAGE_KINDS)[number];
+  /** null = sin revisar todavía: se muestra como antes. */
+  editorial?: ImageEditorial | null;
+  /** Qué muestra la foto, en una oración factual (pie y texto alternativo). */
+  caption?: string;
+  /** La IA no pudo abrir la foto: no se reintenta. */
+  reviewFailedAt?: Date | null;
 }
 
 export interface Infographic {
@@ -142,6 +157,9 @@ export interface Framing {
   title: string;
   lede: string;
   whyItMatters: string;
+  /** Detalles y cuerpo con el orden y el énfasis de la mirada. Vacíos: se lee el texto base. */
+  keyPoints: string[];
+  body: string[];
 }
 
 /** Mensaje de Telegram ligado a la nota, para reconocer respuestas y editar botones. */
@@ -195,7 +213,7 @@ export interface IArticle {
   /** Vistas agregadas por modo, anónimas: sin IP ni nada del lector. */
   viewsByMode: Partial<ModeRelevance>;
   /** Encuadre por mirada. Independiente usa el texto base. */
-  framing: Partial<Record<FramedMode, Framing>> | null;
+  framing: (Partial<Record<FramedMode, Framing>> & { version?: number }) | null;
   /** "Patitas" de la noticia: ideas de seguimiento para la Mesa. Nunca salen al lector. */
   followUps: string[];
   createdAt?: Date;
@@ -222,6 +240,9 @@ const imageSchema = new Schema<ArticleImage>(
     sourceName: { type: String, default: "" },
     sourceUrl: { type: String, default: "" },
     kind: { type: String, enum: IMAGE_KINDS, default: "photo" },
+    editorial: { type: String, enum: [...IMAGE_EDITORIAL, null], default: null },
+    caption: { type: String, default: "" },
+    reviewFailedAt: { type: Date, default: null },
   },
   { _id: false },
 );
@@ -264,11 +285,20 @@ const modeNumbers = Object.fromEntries(READING_MODES.map((m) => [m, { type: Numb
 const modeRelevanceSchema = new Schema<ModeRelevance>(modeNumbers, { _id: false });
 
 const framingItem = new Schema<Framing>(
-  { title: String, lede: String, whyItMatters: String },
+  {
+    title: String,
+    lede: String,
+    whyItMatters: String,
+    keyPoints: { type: [String], default: [] },
+    body: { type: [String], default: [] },
+  },
   { _id: false },
 );
 const framingSchema = new Schema(
-  Object.fromEntries(FRAMED_MODES.map((m) => [m, { type: framingItem, default: null }])),
+  {
+    ...Object.fromEntries(FRAMED_MODES.map((m) => [m, { type: framingItem, default: null }])),
+    version: { type: Number, default: 1 },
+  },
   { _id: false },
 );
 
@@ -281,6 +311,8 @@ const lensSchema = new Schema<Lens>(
     solidez: { type: Number, enum: [1, 2, 3], default: 1 },
     documentosPrimarios: { type: Boolean, default: false },
     contradiccion: { type: Boolean, default: false },
+    refuerzaOficial: { type: Number, default: null },
+    refuerzaOposicion: { type: Number, default: null },
     nota: { type: String, default: "" },
     assessedAt: { type: Date, default: () => new Date() },
   },
