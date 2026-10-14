@@ -23,6 +23,9 @@ Devuelve:
 - solidez: 1 si descansa en un solo medio o una sola declaración; 2 si lo cuentan varias fuentes independientes; 3 si hay documento, resolución, cifra oficial o dato verificable.
 - documentosPrimarios: true si la nota cita un documento primario (decreto, resolución, informe, sentencia, contrato, registro oficial, datos oficiales).
 - contradiccion: true solo si el material muestra una contradicción concreta entre lo dicho y lo hecho, o una promesa incumplida, de cualquier orilla.
+- refuerzaOficial: de 0 a 10, cuánto sostiene este hecho la narrativa oficial: logros, decisiones, resultados u obras del gobierno, operativos con resultados, cifras favorables, la versión del Ejecutivo frente a sus críticos. 10 = un lector noboísta lo compartiría como prueba de que el gobierno cumple.
+- refuerzaOposicion: de 0 a 10, cuánto sostiene la visión de la oposición (correísta o no): críticas al gobierno, fallas, crisis, denuncias, cifras desfavorables, juicios o fiscalizaciones al Ejecutivo, protestas. 10 = un lector correísta lo compartiría como prueba de que el gobierno falla.
+  Un mismo hecho puede puntuar en los dos (cortes de luz anunciados por el gobierno: la decisión sostiene una narrativa y la crisis la otra). Un hecho sin lectura política puntúa bajo en ambos. Juzga por los hechos del material, no por el tono del medio.
 - nota: una oración interna para la Mesa explicando la clasificación. No es para el lector.
 - stances: una por cada fuente, con su índice, la postura de ESA pieza frente a ESTE hecho: ${STANCES.join(", ")}. "oficialista" si la pieza recoge o defiende la versión del gobierno; "correista" si la recoge o defiende la del correísmo; "opositora" si es la de otra oposición; "institucional" si es un órgano del Estado o de control hablando por sí mismo; "neutral" si solo informa sin tomar una versión; "no_aplica" si el hecho no tiene orillas. Juzga por lo que dice la pieza, no por la fama del medio.`;
 
@@ -36,6 +39,8 @@ const lensSchema = {
     solidez: { type: "integer" },
     documentosPrimarios: { type: "boolean" },
     contradiccion: { type: "boolean" },
+    refuerzaOficial: { type: "number" },
+    refuerzaOposicion: { type: "number" },
     nota: { type: "string" },
     stances: {
       type: "array",
@@ -58,6 +63,8 @@ const lensSchema = {
     "solidez",
     "documentosPrimarios",
     "contradiccion",
+    "refuerzaOficial",
+    "refuerzaOposicion",
     "nota",
     "stances",
   ],
@@ -94,6 +101,8 @@ ${sources || "(sin fuentes)"}`;
     solidez: number;
     documentosPrimarios: boolean;
     contradiccion: boolean;
+    refuerzaOficial: number;
+    refuerzaOposicion: number;
     nota: string;
     stances: { index: number; stance: Stance }[];
   }>({
@@ -118,6 +127,8 @@ ${sources || "(sin fuentes)"}`;
       solidez,
       documentosPrimarios: !!result.documentosPrimarios,
       contradiccion: !!result.contradiccion,
+      refuerzaOficial: clamp10(result.refuerzaOficial),
+      refuerzaOposicion: clamp10(result.refuerzaOposicion),
       nota: truncate(String(result.nota ?? ""), 300),
       assessedAt: new Date(),
     },
@@ -159,9 +170,17 @@ export async function assessDoc(doc: any): Promise<boolean> {
   }
 }
 
-/** Para el cron: notas publicadas sin lente (las anteriores a los modos, o las que fallaron). */
+/**
+ * Para el cron: notas publicadas sin lente (las anteriores a los modos, o las
+ * que fallaron) y las recientes con la lente de antes del 13/10, que no medía
+ * qué narrativa refuerza el hecho y por eso no reordenaba casi nada.
+ */
 export async function backfill(limit = 6, deadline = Date.now() + 60_000): Promise<number> {
-  const docs = await Article.find({ status: "published", lens: null })
+  const recent = new Date(Date.now() - 4 * 24 * 3600_000);
+  const docs = await Article.find({
+    status: "published",
+    $or: [{ lens: null }, { publishedAt: { $gte: recent }, "lens.refuerzaOficial": null }],
+  })
     .sort({ publishedAt: -1 })
     .limit(limit);
   let done = 0;
@@ -177,8 +196,10 @@ export async function backfill(limit = 6, deadline = Date.now() + 60_000): Promi
 export function setManualRelevance(doc: any, value: unknown, by: string) {
   if (!value || typeof value !== "object") return;
   const input = value as Record<string, unknown>;
-  const auto: ModeRelevance = doc.modeRelevanceAuto?.toObject?.() ??
-    doc.modeRelevance?.toObject?.() ?? computeRelevance(generalValue(doc), null);
+  const auto: ModeRelevance =
+    doc.modeRelevanceAuto?.toObject?.() ??
+    doc.modeRelevance?.toObject?.() ??
+    computeRelevance(generalValue(doc), null);
   const next = { ...auto };
   for (const mode of Object.keys(next) as (keyof ModeRelevance)[]) {
     if (input[mode] !== undefined) {
