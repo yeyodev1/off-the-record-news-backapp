@@ -1,9 +1,12 @@
 /**
  * Modos de lectura (MODOS-DE-LECTURA.md, ajustado en la reunión del 13 de
  * octubre de 2026: quedan tres miradas y "anti-ambos" se funde con
- * independiente). El modo cambia el orden, qué cobertura se ve primero y el
- * encuadre del titular y la entrada. Los hechos, cifras y nombres son los
- * mismos para todos: el verificador revisa cada encuadre contra el corpus.
+ * independiente). Definición de Andersson: el noboísta no tuerce los hechos,
+ * pero busca los que reafirman la narrativa oficial; el correísta busca la
+ * visión de la oposición; el independiente equilibra ambos. El modo cambia el
+ * orden (también el de "Las 5 cosas") y el encuadre y la redacción de la nota.
+ * Los hechos, cifras y nombres son los mismos para todos: el verificador
+ * revisa cada encuadre contra el corpus.
  */
 
 export const READING_MODES = ["noboista", "correista", "independiente"] as const;
@@ -60,6 +63,10 @@ export interface Lens {
   documentosPrimarios: boolean;
   /** Contradicción entre lo dicho y lo hecho, o promesa incumplida. */
   contradiccion: boolean;
+  /** Cuánto sostiene el hecho la narrativa oficial (logros, decisiones, resultados del gobierno), 0 a 10. */
+  refuerzaOficial: number;
+  /** Cuánto sostiene la visión de la oposición (críticas, fallas, denuncias contra el gobierno), 0 a 10. */
+  refuerzaOposicion: number;
   nota: string;
   assessedAt: Date;
 }
@@ -72,8 +79,21 @@ export type ModeRelevance = Record<ReadingMode, number>;
  * general (0–100) y se recorta a 0–100.
  */
 export const MODE_WEIGHTS: Record<Exclude<ReadingMode, "independiente">, Record<string, number>> = {
-  noboista: { oficialismo: 18, correismo: 4, oposicion: 5, institucional: 2, sinOrilla: -10 },
-  correista: { oficialismo: 5, correismo: 18, oposicion: 6, institucional: 2, sinOrilla: -10 },
+  noboista: {
+    refuerzaOficial: 30,
+    refuerzaOposicion: -12,
+    oficialismo: 8,
+    institucional: 2,
+    sinOrilla: -8,
+  },
+  correista: {
+    refuerzaOposicion: 30,
+    refuerzaOficial: -12,
+    correismo: 10,
+    oposicion: 6,
+    institucional: 2,
+    sinOrilla: -8,
+  },
 };
 
 /** Garantía del spec: lo grande le llega a todos. */
@@ -98,6 +118,9 @@ export function computeRelevance(general: number, lens: Lens | null): ModeReleva
     solidez: (lens.solidez - 1) / 2,
     documentos: lens.documentosPrimarios ? 1 : 0,
     contradiccion: lens.contradiccion ? 1 : 0,
+    // Las lentes anteriores a esta señal no la tienen: cuentan como neutras.
+    refuerzaOficial: (lens.refuerzaOficial ?? 0) / 10,
+    refuerzaOposicion: (lens.refuerzaOposicion ?? 0) / 10,
     sinOrilla: Math.max(lens.oficialismo, lens.correismo, lens.oposicion) < 3 ? 1 : 0,
     puraOrilla:
       lens.solidez === 1 && Math.max(lens.oficialismo, lens.correismo, lens.oposicion) >= 6 ? 1 : 0,
