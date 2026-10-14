@@ -4,6 +4,7 @@ import * as newsroomService from "../services/newsroom.service";
 import * as subscriberService from "../services/subscriber.service";
 import * as lensService from "../services/lens.service";
 import * as framingService from "../services/framing.service";
+import * as imageReviewService from "../services/imageReview.service";
 import * as sourceSheetService from "../services/sourceSheet.service";
 
 // La función de Vercel vive 300 s; lo que sobre del ciclo se usa para la lente.
@@ -25,7 +26,11 @@ export async function newsroom(_req: Request, res: Response, next: NextFunction)
       deadline - Date.now() > 30_000
         ? await framingService.backfill(4, deadline).catch(() => 0)
         : 0;
-    res.status(200).json({ ...run, lensed, framed });
+    const photos =
+      deadline - Date.now() > 15_000
+        ? await imageReviewService.backfill(6, deadline).catch(() => 0)
+        : 0;
+    res.status(200).json({ ...run, lensed, framed, photos });
   } catch (error) {
     next(error);
   }
