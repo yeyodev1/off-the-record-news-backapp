@@ -77,7 +77,15 @@ export async function chatJson<T>(opts: {
   prompt: string;
   schema: Record<string, unknown>;
   maxTokens: number;
+  /** Para mirar una foto: se manda junto al texto. */
+  imageUrl?: string;
 }): Promise<T> {
+  const userContent = opts.imageUrl
+    ? [
+        { type: "text", text: opts.prompt },
+        { type: "image_url", image_url: { url: opts.imageUrl } },
+      ]
+    : opts.prompt;
   const data = await post<{
     choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
   }>(
@@ -87,7 +95,7 @@ export async function chatJson<T>(opts: {
       max_tokens: opts.maxTokens,
       messages: [
         { role: "system", content: opts.system },
-        { role: "user", content: opts.prompt },
+        { role: "user", content: userContent },
       ],
       response_format: {
         type: "json_schema",
