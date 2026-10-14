@@ -97,7 +97,7 @@ Línea editorial (ley de contenido):
 1. Sin banderas políticas: ni a favor ni en contra del Gobierno. La conclusión la pone el lector.
 2. Ningún político es leyenda: nadie, vivo o muerto, es héroe, mártir, prócer ni villano. Hechos, cargos, fechas, consecuencias.
 3. Cero camioneta: sin linchamientos, sin catalogar a nadie de bueno o malo, sin sumarse a la indignación del día.
-4. Equilibrio de orillas: si el tema es político y el material trae versiones de ambos lados, cuéntalas con el medio nombrado (oficialistas de referencia: Radiocentro, La Posta; opositores: Radio Pichincha, Expreso; correístas: Ecuadorinmediato, Pichincha Comunicaciones). Sin arbitrar.
+4. Equilibrio de orillas: la nota que escribes es la de la mirada independiente, la que equilibra la narrativa oficial y la visión de la oposición. Si el tema es político y el material trae versiones de ambos lados, cuéntalas con el mismo peso y con el medio nombrado (oficialistas de referencia: Radiocentro, La Posta; opositores: Radio Pichincha, Expreso; correístas: Ecuadorinmediato, Pichincha Comunicaciones). Sin arbitrar.
 5. La familia es territorio vetado: cero cobertura de familiares (madre, padre, hijos, parejas, hermanos, primos, tíos) del presidente, de los expresidentes y de los alcaldes de Quito y Guayaquil. Única excepción: el familiar que es el actor directo del hecho (firmó el contrato) se cubre por su acto, sin extender el foco a la familia.
 6. Presunción de inocencia: "presunto", "según la Fiscalía", estado procesal explícito. Si falta la versión del aludido, dilo.
 7. Humor solo hacia arriba. Opinión etiquetada o ausente.
@@ -324,6 +324,8 @@ interface CallOptions {
   prompt: string;
   schema: Record<string, unknown>;
   maxTokens: number;
+  /** Foto que la IA tiene que mirar junto al texto. Perplexity no la lee. */
+  imageUrl?: string;
 }
 
 /**
@@ -351,6 +353,7 @@ export async function callJson<T>(opts: CallOptions): Promise<T> {
       claudeDownUntil = Date.now() + CLAUDE_RETRY_MS;
     }
   }
+  if (opts.imageUrl) throw new CustomError("No hay una IA disponible que pueda mirar la foto", 503);
   if (!isPerplexityConfigured()) getClient();
   return perplexityJson<T>(opts);
 }
@@ -366,7 +369,17 @@ async function callClaude<T>(opts: CallOptions): Promise<T> {
       model: opts.model,
       max_tokens: opts.maxTokens,
       system: opts.system,
-      messages: [{ role: "user", content: opts.prompt }],
+      messages: [
+        {
+          role: "user",
+          content: opts.imageUrl
+            ? [
+                { type: "text", text: opts.prompt },
+                { type: "image", source: { type: "url", url: opts.imageUrl } },
+              ]
+            : opts.prompt,
+        },
+      ],
       ...(isHaiku ? {} : { thinking: { type: "adaptive" as const } }),
       output_config: {
         format: { type: "json_schema", schema: opts.schema },
@@ -752,8 +765,10 @@ const framingItemSchema = {
     title: { type: "string" },
     lede: { type: "string" },
     whyItMatters: { type: "string" },
+    keyPoints: { type: "array", items: { type: "string" } },
+    body: { type: "array", items: { type: "string" } },
   },
-  required: ["title", "lede", "whyItMatters"],
+  required: ["title", "lede", "whyItMatters", "keyPoints", "body"],
   additionalProperties: false,
 };
 
@@ -768,14 +783,17 @@ export interface FramingDraft {
   title: string;
   lede: string;
   whyItMatters: string;
+  keyPoints: string[];
+  body: string[];
 }
 
 /**
- * Las tres miradas leen los mismos hechos con distinto énfasis: el lector
- * noboísta quiere saber qué hizo o qué responde el gobierno; el correísta, qué
- * dice o qué le pasa a la Revolución Ciudadana y a la oposición. El encuadre
- * cambia qué se cuenta primero y para quién importa, nunca los datos: cada
- * cifra, nombre y cita sale de la nota base, y el verificador lo comprueba.
+ * Las tres miradas leen los mismos hechos con distinto enfoque (Andersson,
+ * 13/10): el noboísta no tuerce los hechos pero va primero a los que reafirman
+ * la narrativa oficial; el correísta, a la visión de la oposición; el
+ * independiente (la nota base) equilibra ambos. Cambia qué se cuenta primero,
+ * qué se subraya y la redacción, nunca los datos: cada cifra, nombre y cita
+ * sale de la nota base, y el verificador lo comprueba.
  */
 export async function writeFraming(article: {
   title: string;
@@ -791,13 +809,21 @@ Por qué importa: ${article.whyItMatters}
 Detalles: ${article.keyPoints.join(" | ")}
 Cuerpo: ${truncate(article.body.join(" "), 3000)}
 
-Off the Record se lee desde tres miradas. Escribe el titular (máximo 70 caracteres, sin punto final), la entrada (una oración) y el "Por qué importa" (1 o 2 oraciones) para:
-- noboista: lector que sigue al gobierno de Daniel Noboa. Abre con lo que hizo, decidió o responde el Ejecutivo y su bloque; si el hecho es de la oposición, cuéntalo como lo que el gobierno tiene enfrente.
-- correista: lector que sigue a la Revolución Ciudadana y a la oposición. Abre con lo que dice, hace o enfrenta el correísmo o la oposición; si el hecho es del gobierno, cuéntalo como lo que la oposición cuestiona o tiene que responder.
+Off the Record se lee desde tres miradas. La independiente es la nota de arriba, que equilibra ambas orillas. Reescribe la nota entera para las otras dos:
+- noboista: no tuerce los hechos, pero busca entre los hechos de la nota los que reafirman la narrativa oficial y los pone primero: lo que el gobierno de Daniel Noboa hizo, decidió, logró o responde; sus cifras y sus argumentos. Lo que dicen sus críticos va después, contado con su atribución.
+- correista: busca la visión de la oposición (correísmo y otras oposiciones) y la pone primero: lo que cuestionan, denuncian o reclaman; las fallas, costos y cifras que pesan en contra del gobierno. La versión oficial va después, contada con su atribución.
+
+Para cada una escribe:
+- title: titular de máximo 70 caracteres, sin punto final, con el ángulo de esa mirada.
+- lede: entrada de una oración.
+- whyItMatters: "Por qué importa" en 1 o 2 oraciones, para ese lector.
+- keyPoints: los mismos detalles de la nota (puedes reordenarlos y reescribirlos), en el orden de esa mirada.
+- body: el cuerpo reescrito, mismo largo aproximado y la misma cantidad de párrafos, con el orden y el énfasis de esa mirada.
 
 Reglas duras:
-- Los mismos hechos, cifras, nombres y fuentes que la nota. No agregues ni quites datos. No inventes citas.
-- Sin adjetivos valorativos ni militancia: el encuadre elige el ángulo, no toma partido. Ninguna mirada es propaganda.
+- Los mismos hechos, cifras, nombres y fuentes que la nota. No agregues datos ni cambies ninguno. No inventes citas: una cita textual solo si está literal en la nota.
+- El enfoque decide qué va primero y qué se subraya. Sin adjetivos valorativos, sin militancia, sin propaganda: un lector de la otra orilla tiene que poder leerla y no encontrar una mentira.
+- Si la nota trae una sola versión, no inventes la otra: ordena los hechos que hay.
 - Si el hecho no tiene orillas (por ejemplo, una cifra económica sin actores políticos), repite el texto de la nota casi igual.`;
 
   return callJson<{ noboista: FramingDraft; correista: FramingDraft }>({
@@ -805,7 +831,7 @@ Reglas duras:
     system: EDITORIAL_SYSTEM,
     prompt,
     schema: framingSchema,
-    maxTokens: 3000,
+    maxTokens: 8000,
   });
 }
 
