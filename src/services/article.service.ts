@@ -257,14 +257,18 @@ export async function listPublished(query: {
 
 export async function getTop(mode: ReadingMode | null = null) {
   const now = Date.now();
-  const since24h = new Date(now - 24 * 3600_000);
   const since6h = new Date(now - 6 * 3600_000);
   const cardFields = CARD_SELECT;
 
-  const [leadByScore, breaking, latest] = await Promise.all([
-    Article.findOne({ status: "published", publishedAt: { $gte: since24h } })
-      .sort({ "score.total": -1, publishedAt: -1 })
-      .select(cardFields),
+  // "Las 5 cosas que tienes que saber" sale entera del orden del modo, también
+  // la primera (Andersson, 13/10: cambiar de mirada tiene que cambiar el top).
+  // Lo grande igual le llega a todos: computeRelevance le pone piso.
+  const [topFive, breaking, latest] = await Promise.all([
+    rankedCards(
+      { status: "published", publishedAt: { $gte: new Date(now - TOP_FIVE_WINDOW_MS) } },
+      mode ?? "independiente",
+      { limit: 5 },
+    ),
     Article.find({ status: "published", isBreaking: true, publishedAt: { $gte: since6h } })
       .sort({ publishedAt: -1 })
       .limit(5)
@@ -272,28 +276,16 @@ export async function getTop(mode: ReadingMode | null = null) {
     Article.find({ status: "published" }).sort({ publishedAt: -1 }).limit(12).select(cardFields),
   ]);
 
-  const lead = leadByScore ?? latest[0] ?? null;
   const card = (doc: any) => toCard(doc, mode);
-
-  // "Las 5 cosas que tienes que saber": la historia del día va primera en todos
-  // los modos (es la plaza pública); las otras cuatro salen del orden del modo.
-  const rest = await rankedCards(
-    {
-      status: "published",
-      publishedAt: { $gte: new Date(now - TOP_FIVE_WINDOW_MS) },
-      ...(lead ? { _id: { $ne: lead._id } } : {}),
-    },
-    mode ?? "independiente",
-    { limit: 4 },
-  );
+  const lead = topFive[0] ?? (latest[0] ? card(latest[0]) : null);
 
   return {
     modo: mode ?? "independiente",
-    lead: lead ? card(lead) : null,
-    topFive: [...(lead ? [card(lead)] : []), ...rest],
+    lead,
+    topFive: topFive.length ? topFive : lead ? [lead] : [],
     breaking: breaking.map(card),
     latest: latest.map(card),
-    ...(await modeBlocks(mode, lead?._id ?? null)),
+    ...(await modeBlocks(mode, lead?.id ?? null)),
   };
 }
 
@@ -305,12 +297,13 @@ const MODE_WINDOW_MS = 48 * 3600_000;
  * "Lo que tu orilla no está mirando". Nada se oculta: son notas que también
  * están en su sección. El encuadre es el del modo del lector, no el de la otra orilla.
  */
-async function modeBlocks(mode: ReadingMode | null, leadId: unknown) {
+async function modeBlocks(mode: ReadingMode | null, leadId: string | null) {
   if (!isWeighted(mode)) return { otherSide: [] };
+  // El aggregate no castea: el id del lead tiene que ir como ObjectId.
   const recent: Record<string, unknown> = {
     status: "published",
     publishedAt: { $gte: new Date(Date.now() - MODE_WINDOW_MS) },
-    ...(leadId ? { _id: { $ne: leadId } } : {}),
+    ...(leadId && isValidObjectId(leadId) ? { _id: { $ne: new Types.ObjectId(leadId) } } : {}),
   };
 
   // Alta en la orilla contraria y baja en la propia.
