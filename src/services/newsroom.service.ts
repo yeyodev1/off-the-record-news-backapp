@@ -21,6 +21,7 @@ import * as jevService from "./jev.service";
 import * as articleService from "./article.service";
 import * as perplexityService from "./perplexity.service";
 import * as rssService from "./rss.service";
+import * as imageReviewService from "./imageReview.service";
 import * as storyService from "./story.service";
 import * as telegramService from "./telegram.service";
 import * as verifierService from "./verifier.service";
@@ -285,6 +286,32 @@ async function imageForSignal(
   return articleService.imageFromSources(sources);
 }
 
+/**
+ * Foto valorada antes de publicar. Si la del medio principal es genérica, se
+ * prueba la de otra fuente; si tampoco aporta, queda marcada como genérica y la
+ * portada muestra la ficha tipográfica (la Mesa puede cambiarla en el panel).
+ */
+async function reviewedImage(
+  draft: { title: string; lede: string; sources: ArticleSource[] },
+  signal: any,
+) {
+  const first = await imageForSignal(signal, draft.sources);
+  const verdict = first
+    ? await imageReviewService.review({ ...draft, image: first }).catch(() => null)
+    : null;
+  if (!first || !verdict) return first;
+  const reviewed = { ...first, ...verdict };
+  if (verdict.editorial !== "generica") return reviewed;
+  const others = draft.sources.filter((s) => s.url && s.url !== first.sourceUrl);
+  const alt = await articleService.imageFromSources(others);
+  const altVerdict = alt
+    ? await imageReviewService.review({ ...draft, image: alt }).catch(() => null)
+    : null;
+  return alt && altVerdict && altVerdict.editorial !== "generica"
+    ? { ...alt, ...altVerdict }
+    : reviewed;
+}
+
 function photoCredit(url: string, sourceName: string, sourceUrl: string): ArticleImage {
   return { url, credit: `Foto: ${sourceName}`, sourceName, sourceUrl, kind: "photo" };
 }
@@ -352,7 +379,7 @@ export async function draftStory(story: any, { dedupe = false } = {}) {
     [anthropicService.signalsBlock(inputs), anthropicService.researchBlock(research)],
     [...signals.map((s) => s.url), ...(research?.citations ?? [])],
   );
-  const image = await imageForSignal(primary, draft.sources);
+  const image = await reviewedImage(draft, primary);
   // Fuera de la fila: leer las páginas de las fuentes es lo lento. Si el medio
   // bloquea la lectura, su resumen del RSS sirve de respaldo.
   draft.sources = await articleService.enrichSources(
