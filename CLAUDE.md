@@ -54,7 +54,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Tres miradas (reunión del 13/10/2026): `noboista`, `correista`, `independiente`. `anti_ambos` ya no existe; `parseMode` lo lleva a independiente.
 - Pesos, modos y posturas en `src/config/modes.ts`. Agregar un modo = una fila en `MODE_WEIGHTS` (y en `FRAMED_MODES` si tiene encuadre).
 - `lens.service.ts`: la IA solo clasifica (presencia de orillas, solidez, documentos, contradicción, postura por fuente); `computeRelevance` saca los números por modo.
-- `framing.service.ts`: noboísta y correísta tienen su titular, entrada y "Por qué importa" (`article.framing`). Independiente es el texto base. Cada encuadre se verifica contra la nota base: si trae una cifra o un nombre que la nota no tiene, se descarta. Se encuadra al publicar (o en el cron, `framingService.backfill`). `toCard(doc, mode)` y `applyFraming` lo aplican en el API público.
+- Definición (Andersson, 13/10): el noboísta no tuerce los hechos pero va primero a los que reafirman la narrativa oficial; el correísta busca la visión de la oposición; el independiente equilibra ambos. La lente mide `refuerzaOficial` y `refuerzaOposicion` (0–10) y pesan fuerte en `MODE_WEIGHTS`. "Las 5 cosas" sale entera del orden del modo.
+- `framing.service.ts`: noboísta y correísta tienen su titular, entrada, "Por qué importa", detalles y cuerpo (`article.framing`, `FRAMING_VERSION`; subirla hace que el cron rehaga las notas recientes). Si el cuerpo no pasa el verificador se descarta solo el cuerpo. Independiente es el texto base. Cada encuadre se verifica contra la nota base: si trae una cifra o un nombre que la nota no tiene, se descarta. Se encuadra al publicar (o en el cron, `framingService.backfill`). `toCard(doc, mode)` y `applyFraming` lo aplican en el API público.
 - `modeRelevanceAuto` (propuesta) + `modeRelevance` corregida por la Mesa = par del golden set (`/admin/modes/golden`).
 - El modo del lector vive en su navegador. En el servidor solo hay contadores anónimos (`ModeMetric`, `viewsByMode`) y, con consentimiento separado, el modo cifrado del suscriptor (`readingModeSealed`, AES-GCM con `MODE_ENCRYPTION_KEY`), que no sale nunca en el API.
 
@@ -73,3 +74,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `ProTeaser`: tráiler de una nota PRO para la portada gratuita (la IA lo arma desde el texto pegado; `sourceText` nunca sale en el API). `GET /api/pro/teasers`.
 - `ProLead`: empresa interesada (plan semanal/diario, pide reunión). Avisa por correo a `ADMIN_EMAIL`. `POST /api/pro/leads`.
+
+## Fotos
+
+- `imageReview.service.ts` valora la foto (lenguajes visuales: documental, archivo, grafico, generica) mirando la imagen con la IA. La redacción la valora antes de publicar y prueba otra fuente si es genérica; el cron revisa las recientes. La IA nunca genera ni altera imágenes.
