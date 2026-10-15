@@ -14,6 +14,8 @@ import { Edition } from "../models/subscriber.model";
 import { truncate } from "../utils/text";
 import { chatJson as perplexityJson, isPerplexityConfigured } from "./perplexity.service";
 import { chatJson as gatewayJson, isGatewayConfigured } from "./gateway.service";
+import * as lessonService from "./lesson.service";
+import { LessonArea } from "../models/lesson.model";
 
 /**
  * Claude es la mesa de redacción: Haiku valora en lote (barato y rápido) y
@@ -326,13 +328,18 @@ interface CallOptions {
   maxTokens: number;
   /** Foto que la IA tiene que mirar junto al texto. Perplexity no la lee. */
   imageUrl?: string;
+  /** Paso de la mesa: suma al prompt las instrucciones que la Mesa escribió para él. */
+  area?: LessonArea;
 }
 
 /**
  * Orden de preferencia: Claude por el Vercel AI Gateway (sin llave de proveedor
  * que mantener), Claude con llave directa y, si nada de eso responde, Perplexity.
  */
-export async function callJson<T>(opts: CallOptions): Promise<T> {
+export async function callJson<T>(input: CallOptions): Promise<T> {
+  const opts = input.area
+    ? { ...input, system: input.system + (await lessonService.blockFor(input.area)) }
+    : input;
   if (isGatewayConfigured()) {
     try {
       const model = opts.model.includes("haiku")
@@ -490,6 +497,7 @@ ${list}`;
   }>({
     model: env.AI_SCORING_MODEL,
     system: SCORING_SYSTEM,
+    area: "valoracion",
     prompt,
     schema: scoresSchema,
     maxTokens: Math.min(16000, 400 + signals.length * 180),
@@ -574,6 +582,7 @@ async function draftFrom(prompt: string): Promise<ArticleDraft> {
   const draft = await callJson<ArticleDraft>({
     model: env.AI_WRITING_MODEL,
     system: EDITORIAL_SYSTEM,
+    area: "redaccion",
     prompt,
     schema: articleSchema,
     maxTokens: 16000,
@@ -672,6 +681,7 @@ Si no aporta nada nuevo, "nuevo" va en false y "texto" vacío.`;
   const result = await callJson<{ nuevo: boolean; texto: string }>({
     model: env.AI_WRITING_MODEL,
     system: EDITORIAL_SYSTEM,
+    area: "redaccion",
     prompt,
     schema: updateSchema,
     maxTokens: 4000,
@@ -829,6 +839,7 @@ Reglas duras:
   return callJson<{ noboista: FramingDraft; correista: FramingDraft }>({
     model: env.AI_WRITING_MODEL,
     system: EDITORIAL_SYSTEM,
+    area: "modos",
     prompt,
     schema: framingSchema,
     maxTokens: 8000,

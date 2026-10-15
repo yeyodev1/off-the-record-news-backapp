@@ -45,6 +45,7 @@ descripcion: una oración factual de lo que se ve, sin nombres que no estén esc
   const result = await callJson<{ tipo: ImageEditorial; descripcion: string }>({
     model: env.AI_SCORING_MODEL,
     system: REVIEW_SYSTEM,
+    area: "fotos",
     prompt,
     schema: reviewSchema,
     maxTokens: 400,

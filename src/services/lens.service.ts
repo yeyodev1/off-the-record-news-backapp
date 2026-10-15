@@ -108,6 +108,7 @@ ${sources || "(sin fuentes)"}`;
   }>({
     model: env.AI_SCORING_MODEL,
     system: LENS_SYSTEM,
+    area: "modos",
     prompt,
     schema: lensSchema,
     maxTokens: 1500,

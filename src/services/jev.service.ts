@@ -3,6 +3,7 @@ import { Section, SECTIONS } from "../models/article.model";
 import { mapLimit, truncate } from "../utils/text";
 import { SignalForScoring, SignalScore, weightedTotal } from "./anthropic.service";
 import { evaluate, JevAnswer, JevQuestion } from "./gateway.service";
+import * as lessonService from "./lesson.service";
 
 /**
  * Jev es el editor que decide: para cada hecho responde preguntas acotadas
@@ -142,6 +143,31 @@ const QUESTIONS: Record<string, JevQuestion> = {
   },
 };
 
+/**
+ * Lo que la Mesa enseñó desde el panel. Solo se pregunta si hay instrucciones:
+ * "sí" fuerza la nota (salvo veto o familia) y "no" la descarta.
+ */
+const MESA_QUESTIONS: Record<string, JevQuestion> = {
+  mesa_no: {
+    type: "boolean",
+    instructions:
+      "Según las instrucciones_de_la_mesa (y sus casos de ejemplo), ¿este hecho NO debe publicarse?",
+    criteria: {
+      true: "alguna instrucción de la Mesa dice que hechos como este no son noticia o no se cubren",
+      false: "ninguna instrucción de la Mesa lo excluye",
+    },
+  },
+  mesa_si: {
+    type: "boolean",
+    instructions:
+      "Según las instrucciones_de_la_mesa (y sus casos de ejemplo), ¿este hecho SÍ debe publicarse aunque parezca menor?",
+    criteria: {
+      true: "alguna instrucción de la Mesa pide cubrir hechos como este",
+      false: "ninguna instrucción de la Mesa lo pide expresamente",
+    },
+  },
+};
+
 const scale = (a: JevAnswer | undefined) =>
   a?.type === "score" ? Math.round(Math.max(0, Math.min(4, a.score)) * 2.5 * 10) / 10 : 0;
 const prob = (a: JevAnswer | undefined) => (a?.type === "boolean" ? a.probability : 0);
@@ -151,9 +177,14 @@ function nowInEcuador(): string {
   return new Date().toLocaleString("es-EC", { timeZone: "America/Guayaquil" });
 }
 
-async function scoreOne(signal: SignalForScoring, headlines: string[]): Promise<SignalScore> {
+export async function scoreOne(
+  signal: SignalForScoring,
+  headlines: string[],
+): Promise<SignalScore> {
+  const mesa = await lessonService.linesFor("valoracion");
   const answers = await evaluate(
     {
+      ...(mesa.length ? { instrucciones_de_la_mesa: mesa } : {}),
       hecho: truncate(signal.title, 200),
       resumen: truncate(signal.summary, 600),
       medio: signal.sourceName,
@@ -161,7 +192,7 @@ async function scoreOne(signal: SignalForScoring, headlines: string[]): Promise<
       hora_actual_ecuador: nowInEcuador(),
       titulares_publicados: headlines.slice(0, 40),
     },
-    QUESTIONS,
+    mesa.length ? { ...QUESTIONS, ...MESA_QUESTIONS } : QUESTIONS,
   );
 
   const ecuador = prob(answers.ecuador);
@@ -184,17 +215,27 @@ async function scoreOne(signal: SignalForScoring, headlines: string[]): Promise<
 
   const noticia = prob(answers.noticia);
   const vigente = prob(answers.vigente);
+  const mesaNo = prob(answers.mesa_no) >= 0.5;
+  // Si la Mesa pide cubrirlo, pesa más que la duda de Jev, nunca más que el veto ni la vigencia.
+  const mesaSi = !mesaNo && prob(answers.mesa_si) >= 0.6;
+  let total = weightedTotal(parts);
+  if (mesaSi) total = Math.max(total, env.PUBLISH_THRESHOLD);
+  const mesaNote = mesaNo
+    ? " La Mesa indicó que esto no se cubre."
+    : mesaSi
+      ? " La Mesa indicó que esto se cubre."
+      : "";
   return {
     ref: signal.ref,
     duplicate,
     section,
-    notNews: noticia < 0.5 || vigente < 0.5 || prob(answers.vetado) >= 0.5,
+    notNews: mesaNo || vigente < 0.5 || prob(answers.vetado) >= 0.5 || (!mesaSi && noticia < 0.5),
     accusation: prob(answers.acusacion) >= 0.5,
     familyVeto: prob(answers.familia) >= 0.5,
     score: {
       ...parts,
-      total: weightedTotal(parts),
-      reasoning: `Jev: Ecuador ${pct(ecuador)}, hecho noticioso ${pct(noticia)}, reciente ${pct(vigente)}, repetida ${pct(prob(answers.duplicado))}, acusación ${pct(prob(answers.acusacion))}, sección ${section}.`,
+      total,
+      reasoning: `Jev: Ecuador ${pct(ecuador)}, hecho noticioso ${pct(noticia)}, reciente ${pct(vigente)}, repetida ${pct(prob(answers.duplicado))}, acusación ${pct(prob(answers.acusacion))}, sección ${section}.${mesaNote}`,
     },
   };
 }
@@ -204,10 +245,12 @@ export async function scoreSignals(
   signals: SignalForScoring[],
   recentHeadlines: string[] = [],
 ): Promise<SignalScore[]> {
+  let lastError = "";
   const results = await mapLimit(signals, 8, async (s) => {
     try {
       return await scoreOne(s, recentHeadlines);
     } catch (error) {
+      lastError = (error as Error).message;
       console.warn(
         `[jev] no se pudo valorar "${truncate(s.title, 60)}":`,
         (error as Error).message,
@@ -218,7 +261,7 @@ export async function scoreSignals(
   const scored = results.filter((r): r is SignalScore => r !== null);
   // Si falló todo el lote es un problema del gateway, no de las señales: que el ciclo lo registre.
   if (signals.length && !scored.length)
-    throw new Error("Jev no pudo valorar ninguna señal del lote");
+    throw new Error(`Jev no pudo valorar ninguna señal del lote (${lastError.slice(0, 200)})`);
   return scored;
 }
 

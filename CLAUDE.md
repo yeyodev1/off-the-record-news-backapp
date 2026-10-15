@@ -78,3 +78,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Fotos
 
 - `imageReview.service.ts` valora la foto (lenguajes visuales: documental, archivo, grafico, generica) mirando la imagen con la IA. La redacción la valora antes de publicar y prueba otra fuente si es genérica; el cron revisa las recientes. La IA nunca genera ni altera imágenes.
+
+## La mesa por dentro (portal de entrenamiento)
+
+- `/admin/mesa` en el front. `training.service.ts`: `live()` cuenta qué hizo cada agente (salud de IA y Perplexity leída de los errores de los últimos ciclos, fuentes, embudo, señales con el porqué de cada decisión); `tryHeadline()` valora un titular como el ciclo, sin guardar.
+- `Lesson` (`lesson.service.ts`): instrucciones de la Mesa en lenguaje normal por área (`general`, `valoracion`, `redaccion`, `modos`, `fotos`). `callJson({ area })` las suma al prompt de sistema; Jev las recibe en el estado como `instrucciones_de_la_mesa` y responde `mesa_no` / `mesa_si` (sí fuerza el umbral, no descarta). Caché de 60 s por instancia.
+- Corregir una señal desde el panel crea una lección `valoracion` con el caso de ejemplo.

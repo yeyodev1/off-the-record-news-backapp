@@ -46,7 +46,7 @@ const COLLECT_BUDGET_MS = 90_000;
 const RSS_ITEMS_PER_FEED = 15;
 const MAX_ITEM_AGE_MS = 48 * 3600_000;
 // Inmediatez 5 = "ayer" en la escala 0–10: lo más viejo que se redacta.
-const MIN_INMEDIATEZ = 5;
+export const MIN_INMEDIATEZ = 5;
 const SCORE_BATCH_SIZE = 20;
 const MAX_TO_SCORE = 80;
 const MAX_TO_CLUSTER = 80;
@@ -201,7 +201,7 @@ async function saveNewSignals(items: Collected[]) {
   }
 }
 
-async function recentHeadlines(): Promise<string[]> {
+export async function recentHeadlines(): Promise<string[]> {
   const since = new Date(Date.now() - 3 * 24 * 3600_000);
   const docs = await Article.find({
     status: { $in: ["published", "pending"] },

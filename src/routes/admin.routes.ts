@@ -8,6 +8,7 @@ import * as subscriberController from "../controllers/subscriber.controller";
 import * as tipController from "../controllers/tip.controller";
 import * as modeController from "../controllers/mode.controller";
 import * as proController from "../controllers/pro.controller";
+import * as trainingController from "../controllers/training.controller";
 
 const router = Router();
 
@@ -72,6 +73,14 @@ router.delete("/sources/:id", adminController.deleteSource);
 // Mesa de redacción
 router.post("/newsroom/run", adminController.runNewsroom);
 router.get("/newsroom/runs", adminController.listRuns);
+
+// La mesa por dentro: proceso en vivo e instrucciones de la Mesa para la IA
+router.get("/training/live", trainingController.live);
+router.post("/training/try", trainingController.tryHeadline);
+router.get("/training/lessons", trainingController.listLessons);
+router.post("/training/lessons", trainingController.createLesson);
+router.put("/training/lessons/:id", trainingController.updateLesson);
+router.delete("/training/lessons/:id", trainingController.removeLesson);
 
 // Suscriptores
 router.get("/subscribers", subscriberController.adminList);
