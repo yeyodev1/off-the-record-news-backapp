@@ -9,6 +9,7 @@ import * as tipController from "../controllers/tip.controller";
 import * as modeController from "../controllers/mode.controller";
 import * as proController from "../controllers/pro.controller";
 import * as trainingController from "../controllers/training.controller";
+import * as agentController from "../controllers/agent.controller";
 
 const router = Router();
 
@@ -81,6 +82,10 @@ router.get("/training/lessons", trainingController.listLessons);
 router.post("/training/lessons", trainingController.createLesson);
 router.put("/training/lessons/:id", trainingController.updateLesson);
 router.delete("/training/lessons/:id", trainingController.removeLesson);
+// Comportamiento base de cada agente: reglas editables por sección
+router.get("/agents", agentController.list);
+router.put("/agents/:agent/:section", agentController.save);
+router.delete("/agents/:agent/:section", agentController.reset);
 
 // Suscriptores
 router.get("/subscribers", subscriberController.adminList);

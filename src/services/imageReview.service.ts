@@ -2,6 +2,7 @@ import { env } from "../config/env";
 import { Article, ArticleImage, IMAGE_EDITORIAL, ImageEditorial } from "../models/article.model";
 import { truncate } from "../utils/text";
 import { callJson } from "./anthropic.service";
+import * as agentConfig from "./agentConfig.service";
 
 /**
  * Valoración de la foto (Andersson, 13/10: "una foto de la Asamblea, salvo que
@@ -32,14 +33,21 @@ export async function review(
   article: Reviewable,
 ): Promise<{ editorial: ImageEditorial; caption: string } | null> {
   if (!article.image?.url) return null;
+  const [documental, archivo, grafico, generica] = await Promise.all(
+    ["documental", "archivo", "grafico", "generica"].map((k) => agentConfig.bullets("fotos", k)),
+  );
   const prompt = `Titular: ${article.title}
 Entrada: ${truncate(article.lede, 400)}
 
 Clasifica la imagen adjunta:
-- documental: fotografía del instante concreto de este hecho (la sesión, el operativo, la protesta, el anuncio, el documento exhibido), con personas, objetos o circunstancias identificables.
-- archivo: fotografía real de los protagonistas o del lugar, pero que no es de este hecho (retrato, foto de otra fecha, foto de agenda).
-- grafico: infografía, tabla, mapa, captura de un documento o gráfico con datos.
-- generica: no aporta información sobre el hecho: fachada de un edificio, hemiciclo o salón vacío, plano general sin acción, logo, banner del medio, imagen de banco, ilustración decorativa, foto con texto de portada o miniatura de un noticiero.
+- documental:
+${documental}
+- archivo:
+${archivo}
+- grafico:
+${grafico}
+- generica:
+${generica}
 
 descripcion: una oración factual de lo que se ve, sin nombres que no estén escritos en la imagen o en el titular.`;
   const result = await callJson<{ tipo: ImageEditorial; descripcion: string }>({

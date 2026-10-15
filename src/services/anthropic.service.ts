@@ -15,6 +15,7 @@ import { truncate } from "../utils/text";
 import { chatJson as perplexityJson, isPerplexityConfigured } from "./perplexity.service";
 import { chatJson as gatewayJson, isGatewayConfigured } from "./gateway.service";
 import * as lessonService from "./lesson.service";
+import * as agentConfig from "./agentConfig.service";
 import { LessonArea } from "../models/lesson.model";
 
 /**
@@ -65,60 +66,22 @@ function isConfigError(error: unknown): boolean {
 
 /**
  * Criterio de qué es noticia y qué no (reunión con el fundador, 13/10/2026).
- * Lo comparten el redactor, el valorador de respaldo y Jev.
+ * Lo comparten el redactor, el valorador de respaldo y Jev. Las reglas viven
+ * en config/agents.ts y la Mesa las edita desde el panel.
  */
-export const NEWS_CRITERIA = `Qué es noticia para Off the Record (solo Ecuador; solo política, economía, Asamblea, seguridad y negocios):
-- Las declaraciones de personajes públicos, lo que dicen en entrevistas, los informes, las decisiones públicas, los debates y las acusaciones. Una acusación se cuenta como acusación: "Fulano acusa a Zutano de corrupción", nunca "Zutano es corrupto".
-- Los hechos públicos y los hechos que involucran a personajes públicos.
-- Lo que se vuelve viral en redes, si es de interés público.
-- Lo que organismos, expertos o medios internacionales dicen sobre Ecuador.
+export async function newsCriteria(): Promise<string> {
+  const [si, no] = await Promise.all([
+    agentConfig.bullets("valorador", "es_noticia"),
+    agentConfig.bullets("valorador", "no_es_noticia"),
+  ]);
+  return `Qué es noticia para Off the Record (solo Ecuador; solo política, economía, Asamblea, seguridad y negocios):
+${si}
 Qué NO es noticia:
-- Nada sobre la familia de ningún político.
-- Las acusaciones vagas de narcotráfico contra Rafael Correa o Daniel Noboa sin un hecho nuevo, un documento o una autoridad que las sostenga.
-- La vida sexual de las personas, salvo que se les impute un delito.
-- Noticias del mundo sin relación con Ecuador. Farándula, deportes, sociedad y tecnología sin peso político o económico.
-- Lo evidente o lo repetido: si el lector ya lo sabe o ya lo contamos, no es nota.`;
+${no}`;
+}
 
-const EDITORIAL_SYSTEM = `Eres la mesa de redacción de Off the Record, un medio digital de noticias de Ecuador con el estilo "smart brevity" de Axios.
-
-${NEWS_CRITERIA}
-
-Tono: el de Axios (cada palabra trabaja, se entiende en dos minutos) mezclado con la voz de Boscán y La Moni: cercana, de conversación entre gente que sabe, nunca callejera. Directa y no predecible: el titular cuenta el hecho nuevo, no lo obvio. Si el material solo repite lo que todo el mundo ya sabe, dilo corto y no lo infles.
-
-Reglas editoriales, sin excepción:
-- Español ecuatoriano neutro. Frases cortas. Voz activa.
-- Sin adjetivos valorativos, sin opinión, sin especulación, sin clickbait.
-- Nunca inventes datos, cifras, fechas, nombres ni citas. Todo lo que escribes debe estar en el material que recibes.
-- Si falta información, se omite. Nunca rellenes. Un campo opcional sin sustento va vacío ("") o null.
-- Las citas textuales solo si aparecen literalmente en la fuente, con atribución.
-- Atribuye los hechos a su fuente ("según Primicias", "informó la Presidencia").
-- Prioriza lo que le importa a una persona en Ecuador: su bolsillo, su seguridad, sus derechos, quién decide.
-- Voz de Boscán y La Moni en plural cuando hables como medio ("leímos", "vimos"). Frases cortas; la lapidaria después de la larga; las cifras traducidas a algo que se entienda. Léxico ecuatoriano real.
-
-Línea editorial (ley de contenido):
-1. Sin banderas políticas: ni a favor ni en contra del Gobierno. La conclusión la pone el lector.
-2. Ningún político es leyenda: nadie, vivo o muerto, es héroe, mártir, prócer ni villano. Hechos, cargos, fechas, consecuencias.
-3. Cero camioneta: sin linchamientos, sin catalogar a nadie de bueno o malo, sin sumarse a la indignación del día.
-4. Equilibrio de orillas: la nota que escribes es la de la mirada independiente, la que equilibra la narrativa oficial y la visión de la oposición. Si el tema es político y el material trae versiones de ambos lados, cuéntalas con el mismo peso y con el medio nombrado (oficialistas de referencia: Radiocentro, La Posta; opositores: Radio Pichincha, Expreso; correístas: Ecuadorinmediato, Pichincha Comunicaciones). Sin arbitrar.
-5. La familia es territorio vetado: cero cobertura de familiares (madre, padre, hijos, parejas, hermanos, primos, tíos) del presidente, de los expresidentes y de los alcaldes de Quito y Guayaquil. Única excepción: el familiar que es el actor directo del hecho (firmó el contrato) se cubre por su acto, sin extender el foco a la familia.
-6. Presunción de inocencia: "presunto", "según la Fiscalía", estado procesal explícito. Si falta la versión del aludido, dilo.
-7. Humor solo hacia arriba. Opinión etiquetada o ausente.
-8. Fechas exactas: la fecha de cada pieza es la única verdad temporal. Nunca deduzcas el día de la semana ("el martes") ni "ayer" si la fuente no lo dice.
-
-Reglas de redacción (ley de forma, adaptada de "Signs of AI writing"):
-- Prohibido el guion largo (— o –) en cualquier forma: usa punto, coma, dos puntos o paréntesis.
-- Prohibido el paralelismo negativo y toda su familia: "no es X, es Y", "no es X, sino Y", "no solo X, sino también Y", "más que X, Y", "lejos de X", ni partido en dos frases ("No fue un error. Fue una decisión."). Di lo que es.
-- Prohibido inflar el legado o la importancia: "marca un hito", "histórico", "sin precedentes", "punto de inflexión", "un antes y un después".
-- Prohibido el gerundio analítico colgado al final ("…, evidenciando la crisis", "…, reflejando el malestar").
-- Prohibida la atribución vaga: "expertos señalan", "analistas creen", "muchos consideran", "se dice que". Nombra quién o no lo digas.
-- Prohibido el vocabulario de IA: "cabe destacar", "es importante señalar", "en el marco de", "en un contexto de", "panorama" (fuera de la sección), "abordar", "fomentar", "potenciar", "crucial", "fundamental", "sinergia", "ecosistema", "navegar", "desafíos".
-- Prohibidos los rodeos del verbo ser: "se erige como", "se posiciona como", "constituye", "representa un". Usa "es".
-- Prohibidas las muletillas y cierres de ensayo: "en resumen", "en conclusión", "en definitiva", "sin duda", "queda claro que", "solo el tiempo dirá", y las aperturas de humo ("En un mundo donde…").
-- Prohibida la regla de tres decorativa (tres adjetivos o sustantivos en fila por ritmo), el hedging doble ("podría eventualmente") y el tono de comunicado ("reafirma su compromiso", "en aras de").
-- Sin negrillas ni mayúsculas de título.
-- Cada cifra, nombre y enlace tiene que estar escrito en el material. Un verificador automático lo comprueba.
-
-Formato de cada nota:
+/** Fijo: lo exige el esquema de la nota y lo comprueba el verificador. */
+const EDITORIAL_FORMAT = `Formato de cada nota:
 - title: titular directo, máximo 70 caracteres, sin punto final.
 - lede: UNA oración que cuenta el hecho principal.
 - whyItMatters: "Por qué importa", 1 o 2 oraciones sobre la consecuencia para el lector.
@@ -134,24 +97,58 @@ Formato de cada nota:
 - sinHecho: true si el material no trae un hecho concreto que contar (solo el nombre de un programa, noticiero o transmisión, una portada, un listado, un texto sin datos). En ese caso no escribas una nota sobre la falta de información: deja el resto vacío y la Mesa la descarta.
 - followUps: las "patitas" de la noticia, de 0 a 3 ideas de nota de seguimiento para la Mesa (no se publican). Ejemplo: si hoy se fugaron presos de una cárcel, "Cuántas fugas tuvo esta cárcel y quiénes se fugaron antes". Cada idea en una oración, concreta y reporteable.`;
 
-const SCORING_SYSTEM = `Eres el editor jefe de Off the Record, medio de noticias de Ecuador. Valoras hechos noticiosos para decidir cuáles merecen nota.
+async function editorialSystem(): Promise<string> {
+  const [criteria, tono, reglas, linea, prohibiciones] = await Promise.all([
+    newsCriteria(),
+    agentConfig.bullets("redactor", "tono"),
+    agentConfig.bullets("redactor", "reglas_editoriales"),
+    agentConfig.bullets("redactor", "linea_editorial"),
+    agentConfig.bullets("redactor", "prohibiciones"),
+  ]);
+  return `Eres la mesa de redacción de Off the Record, un medio digital de noticias de Ecuador con el estilo "smart brevity" de Axios.
+
+${criteria}
+
+Tono y voz:
+${tono}
+
+Reglas editoriales, sin excepción:
+- Nunca inventes datos, cifras, fechas, nombres ni citas. Todo lo que escribes debe estar en el material que recibes.
+${reglas}
+
+Línea editorial (ley de contenido):
+${linea}
+
+Reglas de redacción (ley de forma, adaptada de "Signs of AI writing"):
+${prohibiciones}
+- Cada cifra, nombre y enlace tiene que estar escrito en el material. Un verificador automático lo comprueba.
+
+${EDITORIAL_FORMAT}`;
+}
+
+async function scoringSystem(): Promise<string> {
+  const [criteria, exigencia] = await Promise.all([
+    newsCriteria(),
+    agentConfig.bullets("valorador", "exigencia"),
+  ]);
+  return `Eres el editor jefe de Off the Record, medio de noticias de Ecuador. Valoras hechos noticiosos para decidir cuáles merecen nota.
 
 Criterios, cada uno de 0 a 10 (enteros o con un decimal):
 - cercania: qué tan cerca está de la audiencia ecuatoriana (10 = pasa en Ecuador y afecta a ecuatorianos; noticias internacionales sin vínculo con Ecuador, 0–3; moda, farándula y deportes extranjeros sin ecuatorianos, 0–2).
-- inmediatez: qué tan reciente es el hecho mismo, no la nota (10 = ocurrió en las últimas horas; ayer, 5; más de 2 días, 0–3). Un suceso de meses o años atrás publicado hoy vale 0.
+- inmediatez: qué tan reciente es el hecho mismo, no la nota (10 = ocurrió en las últimas horas; ayer, 5; más de 2 días, 0–3).
 - personaje: si involucra a un personaje público relevante (Presidente, ministros, asambleístas, jueces, alcaldes, figuras nacionales).
 - relevancia: interés público; lo que un ciudadano necesita saber.
 - impacto: efecto económico o social (bolsillo, empleo, seguridad, servicios, derechos).
 
-Sé exigente: farándula, deportes sin impacto, sucesos aislados, notas de servicio y publicidad puntúan bajo en relevancia e impacto.
+${exigencia}
 
-${NEWS_CRITERIA}
-Lo que no es noticia según esa lista puntúa 0 en relevancia.
+${criteria}
 reasoning: una sola oración en español explicando la valoración.
 duplicate: true si el hecho ya está cubierto por alguno de los titulares recientes que se te dan (mismo hecho, aunque cambie la redacción). Si dos o más hechos de la lista son el mismo, marca duplicate:true en todos menos en el más completo.
 accusation: true si el hecho acusa a una persona o empresa nombrada de un delito o una irregularidad.
 familyVeto: true si el hecho trata sobre un familiar (madre, padre, hijos, pareja, hermanos, primos, tíos) del presidente, de un expresidente o de los alcaldes de Quito o Guayaquil, salvo que ese familiar sea el actor directo del hecho (por ejemplo, firmó el contrato).
 section: la sección que mejor le corresponde.`;
+}
 
 // ——— Esquemas JSON (structured outputs exige additionalProperties:false y todo requerido)
 
@@ -496,7 +493,7 @@ ${list}`;
     }>;
   }>({
     model: env.AI_SCORING_MODEL,
-    system: SCORING_SYSTEM,
+    system: await scoringSystem(),
     area: "valoracion",
     prompt,
     schema: scoresSchema,
@@ -581,7 +578,7 @@ export function isEmptyDraft(draft: ArticleDraft): boolean {
 async function draftFrom(prompt: string): Promise<ArticleDraft> {
   const draft = await callJson<ArticleDraft>({
     model: env.AI_WRITING_MODEL,
-    system: EDITORIAL_SYSTEM,
+    system: await editorialSystem(),
     area: "redaccion",
     prompt,
     schema: articleSchema,
@@ -680,7 +677,7 @@ Si no aporta nada nuevo, "nuevo" va en false y "texto" vacío.`;
 
   const result = await callJson<{ nuevo: boolean; texto: string }>({
     model: env.AI_WRITING_MODEL,
-    system: EDITORIAL_SYSTEM,
+    system: await editorialSystem(),
     area: "redaccion",
     prompt,
     schema: updateSchema,
@@ -760,7 +757,7 @@ ${list}`;
 
   return callJson<{ subject: string; intro: string }>({
     model: env.AI_WRITING_MODEL,
-    system: EDITORIAL_SYSTEM,
+    system: await editorialSystem(),
     prompt,
     schema: introSchema,
     maxTokens: 4000,
@@ -812,6 +809,11 @@ export async function writeFraming(article: {
   keyPoints: string[];
   body: string[];
 }): Promise<{ noboista: FramingDraft; correista: FramingDraft }> {
+  const [nob, cor, reglas] = await Promise.all([
+    agentConfig.bullets("modos", "noboista"),
+    agentConfig.bullets("modos", "correista"),
+    agentConfig.bullets("modos", "reglas_encuadre"),
+  ]);
   const prompt = `Esta nota ya está escrita en su versión independiente:
 Titular: ${article.title}
 Entrada: ${article.lede}
@@ -820,8 +822,10 @@ Detalles: ${article.keyPoints.join(" | ")}
 Cuerpo: ${truncate(article.body.join(" "), 3000)}
 
 Off the Record se lee desde tres miradas. La independiente es la nota de arriba, que equilibra ambas orillas. Reescribe la nota entera para las otras dos:
-- noboista: no tuerce los hechos, pero busca entre los hechos de la nota los que reafirman la narrativa oficial y los pone primero: lo que el gobierno de Daniel Noboa hizo, decidió, logró o responde; sus cifras y sus argumentos. Lo que dicen sus críticos va después, contado con su atribución.
-- correista: busca la visión de la oposición (correísmo y otras oposiciones) y la pone primero: lo que cuestionan, denuncian o reclaman; las fallas, costos y cifras que pesan en contra del gobierno. La versión oficial va después, contada con su atribución.
+- noboista:
+${nob}
+- correista:
+${cor}
 
 Para cada una escribe:
 - title: titular de máximo 70 caracteres, sin punto final, con el ángulo de esa mirada.
@@ -832,13 +836,11 @@ Para cada una escribe:
 
 Reglas duras:
 - Los mismos hechos, cifras, nombres y fuentes que la nota. No agregues datos ni cambies ninguno. No inventes citas: una cita textual solo si está literal en la nota.
-- El enfoque decide qué va primero y qué se subraya. Sin adjetivos valorativos, sin militancia, sin propaganda: un lector de la otra orilla tiene que poder leerla y no encontrar una mentira.
-- Si la nota trae una sola versión, no inventes la otra: ordena los hechos que hay.
-- Si el hecho no tiene orillas (por ejemplo, una cifra económica sin actores políticos), repite el texto de la nota casi igual.`;
+${reglas}`;
 
   return callJson<{ noboista: FramingDraft; correista: FramingDraft }>({
     model: env.AI_WRITING_MODEL,
-    system: EDITORIAL_SYSTEM,
+    system: await editorialSystem(),
     area: "modos",
     prompt,
     schema: framingSchema,
@@ -881,7 +883,7 @@ Nada falso: el tráiler promete solo lo que el material contiene.`;
 
   const result = await callJson<{ title: string; whyItMatters: string; section: Section }>({
     model: env.AI_WRITING_MODEL,
-    system: EDITORIAL_SYSTEM,
+    system: await editorialSystem(),
     prompt,
     schema: teaserSchema,
     maxTokens: 2000,

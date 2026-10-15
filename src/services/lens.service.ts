@@ -3,6 +3,7 @@ import { computeRelevance, Lens, ModeRelevance, Stance, STANCES } from "../confi
 import { Article, ArticleSource } from "../models/article.model";
 import { truncate } from "../utils/text";
 import { callJson } from "./anthropic.service";
+import * as agentConfig from "./agentConfig.service";
 
 /**
  * Lente por orillas (M2 postura por pieza + M5 relevancia por modo). La IA solo
@@ -10,13 +11,12 @@ import { callJson } from "./anthropic.service";
  * calcula `computeRelevance` con los pesos de config/modes.ts.
  */
 
-const LENS_SYSTEM = `Eres analista de la Mesa de Off the Record, medio de noticias de Ecuador. No redactas: clasificas un hecho ya publicado para ordenar la portada según el modo de lectura de cada persona. El texto de la nota no cambia nunca.
+const lensSystem = (
+  contexto: string,
+) => `Eres analista de la Mesa de Off the Record, medio de noticias de Ecuador. No redactas: clasificas un hecho ya publicado para ordenar la portada según el modo de lectura de cada persona. El texto de la nota no cambia nunca.
 
 Contexto político de Ecuador:
-- Oficialismo: el Ejecutivo (Presidencia de Daniel Noboa, ministerios, gobernaciones) y su bloque en la Asamblea (ADN y aliados que votan con el gobierno).
-- Correísmo: la Revolución Ciudadana (RC5), Rafael Correa, Luisa González y sus asambleístas, alcaldes y prefectos.
-- Oposición no correísta: PSC, Pachakutik, Construye, Izquierda Democrática y otros que se oponen al gobierno sin ser correístas.
-- Institucional y de control: Fiscalía, Corte Constitucional, Corte Nacional, Contraloría, CNE, TCE, CPCCS, Defensoría, Superintendencias, Banco Central.
+${contexto}
 
 Devuelve:
 - oficialismo, correismo, oposicion, institucional: de 0 a 10, cuánto protagoniza el hecho cada uno (10 = actor central; 0 = no aparece). Un hecho de economía doméstica sin actores políticos puede tener todo en 0 o casi.
@@ -107,7 +107,7 @@ ${sources || "(sin fuentes)"}`;
     stances: { index: number; stance: Stance }[];
   }>({
     model: env.AI_SCORING_MODEL,
-    system: LENS_SYSTEM,
+    system: lensSystem(await agentConfig.bullets("modos", "contexto_politico")),
     area: "modos",
     prompt,
     schema: lensSchema,

@@ -4,6 +4,7 @@ import { mapLimit, truncate } from "../utils/text";
 import { SignalForScoring, SignalScore, weightedTotal } from "./anthropic.service";
 import { evaluate, JevAnswer, JevQuestion } from "./gateway.service";
 import * as lessonService from "./lesson.service";
+import * as agentConfig from "./agentConfig.service";
 
 /**
  * Jev es el editor que decide: para cada hecho responde preguntas acotadas
@@ -63,11 +64,11 @@ const QUESTIONS: Record<string, JevQuestion> = {
   vetado: {
     type: "boolean",
     instructions:
-      "¿El hecho es de los que Off the Record no cubre? Acusaciones vagas de narcotráfico contra Rafael Correa o Daniel Noboa sin un hecho, documento o autoridad nueva que las sostenga; la vida sexual de alguien sin imputación de un delito; chismes sobre la vida privada de políticos.",
+      "¿El hecho cae en alguna de las categorías de criterio_de_otr.no_es_noticia? Juzga por el foco del hecho. Un desarrollo nuevo de un tema ya contado no cuenta como repetido: eso lo mide otra pregunta.",
     criteria: {
-      true: "el foco es una acusación vaga de narco contra Correa o Noboa, la vida sexual o la vida privada de una persona sin delito imputado",
+      true: "el foco del hecho es algo que criterio_de_otr.no_es_noticia excluye",
       false:
-        "hecho de interés público con sustento: declaración, decisión, informe, acusación concreta o hecho verificable",
+        "hecho de interés público con sustento que no cae en ninguna exclusión: declaración, decisión, informe, acusación concreta o hecho verificable",
     },
   },
   duplicado: {
@@ -181,9 +182,14 @@ export async function scoreOne(
   signal: SignalForScoring,
   headlines: string[],
 ): Promise<SignalScore> {
-  const mesa = await lessonService.linesFor("valoracion");
+  const [mesa, esNoticia, noEsNoticia] = await Promise.all([
+    lessonService.linesFor("valoracion"),
+    agentConfig.rules("valorador", "es_noticia"),
+    agentConfig.rules("valorador", "no_es_noticia"),
+  ]);
   const answers = await evaluate(
     {
+      criterio_de_otr: { es_noticia: esNoticia, no_es_noticia: noEsNoticia },
       ...(mesa.length ? { instrucciones_de_la_mesa: mesa } : {}),
       hecho: truncate(signal.title, 200),
       resumen: truncate(signal.summary, 600),
