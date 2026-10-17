@@ -3,9 +3,10 @@ import { CustomError } from "../errors/customError.error";
 import { Article, SECTION_NAMES, Section } from "../models/article.model";
 import { NewsletterIssue } from "../models/newsletterIssue.model";
 import { Edition, EDITIONS, Subscriber } from "../models/subscriber.model";
-import { articleUrl, forgetModeUrl, unsubscribeUrl } from "../utils/links";
+import { articleUrl, forgetModeUrl, proUrl, unsubscribeUrl } from "../utils/links";
 import { READING_MODES, ReadingMode } from "../config/modes";
 import * as subscriberService from "./subscriber.service";
+import * as proService from "./pro.service";
 import { paginate } from "../utils/paginate";
 import { escapeHtml, mapLimit } from "../utils/text";
 import * as anthropicService from "./anthropic.service";
@@ -61,13 +62,53 @@ function articleBlock(a: any): string {
     </td></tr>`;
 }
 
-function renderHtml(edition: Edition, intro: string, articles: any[]): string {
+/** Sección de venta: las mejores notas PRO del día con titular de curiosidad. */
+function proSection(picks: Array<{ hook: string }>): string {
+  if (!picks.length) return "";
+  const url = proUrl();
+  const rows = picks
+    .map(
+      (p) => `
+      <tr><td style="padding:10px 0;border-top:1px solid #3f3f46">
+        <a href="${url}" style="color:#fff;text-decoration:none;font-size:16px;font-weight:bold">${escapeHtml(p.hook)}</a>
+      </td></tr>`,
+    )
+    .join("");
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;background:#111;border-radius:10px">
+      <tr><td style="padding:18px 20px">
+        <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#a1a1aa;margin-bottom:6px">Off the Record PRO · solo para suscriptores</div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="color:#fff">${rows}</table>
+        <a href="${url}" style="display:inline-block;margin-top:14px;padding:9px 18px;background:#fff;color:#111;border-radius:4px;font-weight:bold;text-decoration:none">Entrar a PRO</a>
+      </td></tr>
+    </table>`;
+}
+
+function renderHtml(edition: Edition, intro: string, articles: any[], proBlock = ""): string {
   const body = `
     <p style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#71717a;margin:0 0 4px">La historia del día</p>
     <p style="margin:0 0 16px">${escapeHtml(intro)}</p>
     <table width="100%" cellpadding="0" cellspacing="0">${articles.map(articleBlock).join("")}</table>
+    ${proBlock}
     <p style="margin-top:24px;font-size:12px;color:#71717a">Recibes este correo porque te suscribiste a Off the Record. <a href="${UNSUBSCRIBE_PLACEHOLDER}" style="color:#71717a">Darte de baja</a>.${FORGET_MODE_PLACEHOLDER}</p>`;
   return layout(EDITION_TITLE[edition], body);
+}
+
+/** Arma la sección PRO del boletín. Nunca rompe el envío: sin IA o sin notas, va vacía. */
+async function buildProBlock(): Promise<string> {
+  try {
+    const picks = await proService.newsletterPicks(5);
+    if (!picks.length) return "";
+    const hooks = await anthropicService.proNewsletterHooks(picks);
+    const byId = new Map(hooks.map((h) => [h.id, h.hook]));
+    const rows = picks
+      .map((p) => ({ hook: (byId.get(p.id) || p.title || "").trim() }))
+      .filter((p) => p.hook);
+    return proSection(rows);
+  } catch (error) {
+    console.warn("[boletin] no se pudo armar la sección PRO:", (error as Error).message);
+    return "";
+  }
 }
 
 /**
@@ -97,15 +138,18 @@ export async function buildIssue(edition: Edition) {
     edition,
   );
 
+  // La vitrina de PRO es la misma para todos los modos: es una venta, no una nota.
+  const proBlock = await buildProBlock();
+
   const issue = await NewsletterIssue.create({
     edition,
     subject: subject.trim() || EDITION_TITLE[edition],
     intro,
-    html: renderHtml(edition, intro, articles),
+    html: renderHtml(edition, intro, articles, proBlock),
     htmlByMode: Object.fromEntries(
       READING_MODES.filter((m) => m !== "independiente").map((m) => [
         m,
-        renderHtml(edition, intro, orderFor(m, articles)),
+        renderHtml(edition, intro, orderFor(m, articles), proBlock),
       ]),
     ),
     articleIds: articles.map((a: any) => a._id),

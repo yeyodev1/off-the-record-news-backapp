@@ -30,6 +30,25 @@ export async function publicTeasers() {
   return { items: items.map((d: any) => d.toJSON()), sealedThisWeek };
 }
 
+/**
+ * Las mejores notas PRO del día para venderlas en el boletín: las publicadas en
+ * las últimas 36 h, de la más nueva a la más vieja, hasta `limit`. Si no hubo
+ * nada en el día, el boletín simplemente no lleva la sección PRO.
+ */
+export async function newsletterPicks(limit = 5) {
+  const since = new Date(Date.now() - 36 * 3600_000);
+  const items = await ProTeaser.find({ status: "published", publishedAt: { $gte: since } })
+    .sort({ publishedAt: -1 })
+    .limit(limit)
+    .select("title whyItMatters section");
+  return items.map((d: any) => ({
+    id: String(d._id),
+    title: d.title as string,
+    whyItMatters: (d.whyItMatters as string) ?? "",
+    section: d.section as string,
+  }));
+}
+
 // ——— Teasers (panel)
 
 function getTeaser(id: string) {

@@ -4,6 +4,11 @@ export function articleUrl(slug: string): string {
   return `${env.FRONTEND_URL.replace(/\/+$/, "")}/nota/${slug}`;
 }
 
+/** La página de venta de OTR PRO, a la que apunta el boletín. */
+export function proUrl(): string {
+  return `${env.FRONTEND_URL.replace(/\/+$/, "")}/pro`;
+}
+
 /** Borra el modo de lectura guardado del suscriptor, con un tap desde el correo. */
 export function forgetModeUrl(token: string): string {
   const base = (env.PUBLIC_API_URL || `http://localhost:${env.PORT}`).replace(/\/+$/, "");

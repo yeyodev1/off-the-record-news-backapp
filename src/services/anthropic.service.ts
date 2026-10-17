@@ -764,6 +764,64 @@ ${list}`;
   });
 }
 
+// ——— OTR PRO en el boletín: titulares de venta (clickbait a propósito)
+
+const proHooksSchema = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          hook: { type: "string" },
+        },
+        required: ["id", "hook"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["items"],
+  additionalProperties: false,
+};
+
+/**
+ * Convierte cada nota reservada de OTR PRO en un titular de venta para el
+ * boletín: curiosidad, "entérate", sin revelar el dato. Sistema propio porque
+ * la línea editorial prohíbe el clickbait en las notas públicas; aquí sí se
+ * busca, porque es la vitrina para vender PRO.
+ */
+export async function proNewsletterHooks(
+  teasers: Array<{ id: string; title: string; whyItMatters: string }>,
+): Promise<Array<{ id: string; hook: string }>> {
+  if (!teasers.length) return [];
+  const list = teasers
+    .map((t) => `id ${t.id}: ${t.title}${t.whyItMatters ? ` — ${t.whyItMatters}` : ""}`)
+    .join("\n");
+
+  const prompt = `Eres el copy de marketing de Off the Record PRO, la línea reservada de OTR (investigaciones y datos que no son públicos). Para el boletín, convierte cada nota PRO en un titular de venta que dé curiosidad y haga querer entrar a leer, sin revelar el dato clave.
+
+Reglas de cada hook:
+- Máximo 70 caracteres, sin punto final.
+- Tono "entérate": despierta la curiosidad, promete algo concreto, pero no spoilea la cifra ni el nombre reservado.
+- En español de Ecuador, directo, nada de "en un mundo donde" ni relleno.
+- Devuelve el mismo id que recibes.
+
+Notas PRO:
+${list}`;
+
+  const result = await callJson<{ items: Array<{ id: string; hook: string }> }>({
+    model: env.AI_WRITING_MODEL,
+    system:
+      "Eres un redactor de titulares de venta. Escribes ganchos breves, de curiosidad, en español de Ecuador.",
+    prompt,
+    schema: proHooksSchema,
+    maxTokens: 1200,
+  });
+  return result.items ?? [];
+}
+
 // ——— Encuadre por mirada
 
 const framingItemSchema = {
