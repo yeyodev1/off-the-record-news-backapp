@@ -12,11 +12,13 @@ const EDITABLE = [
   "isActive",
   "everyMinutes",
   "notes",
+  "photoLicensed",
 ] as const;
 
 function pick(body: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
   for (const key of EDITABLE) if (body[key] !== undefined) out[key] = body[key];
+  if (out.photoLicensed !== undefined) out.photoLicensed = !!out.photoLicensed;
   if (out.kind !== undefined && !SOURCE_KINDS.includes(out.kind as any))
     throw new CustomError("Tipo de fuente inválido", 400);
   if (out.category !== undefined && !SOURCE_CATEGORIES.includes(out.category as any)) {

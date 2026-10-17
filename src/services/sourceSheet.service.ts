@@ -21,6 +21,7 @@ const HEADERS = [
   "cada_minutos",
   "activa",
   "notas",
+  "licencia",
 ];
 
 /** CSV con comillas dobles, comas y saltos de línea dentro de una celda. */
@@ -98,6 +99,7 @@ interface SheetRow {
   everyMinutes: number;
   isActive: boolean;
   notes: string;
+  photoLicensed: boolean;
 }
 
 export function rowsToSources(rows: string[][]): { items: SheetRow[]; errors: string[] } {
@@ -151,6 +153,8 @@ export function rowsToSources(rows: string[][]): { items: SheetRow[]; errors: st
       everyMinutes: Number.isFinite(every) && every > 0 ? Math.round(every) : 0,
       isActive: get(r, "activa") ? yes(get(r, "activa")) : true,
       notes: person && url ? [notes, url].filter(Boolean).join(" · ") : notes,
+      // Licencia para usar sus fotos: vacío = no. Vale "sí", "licencia", "true", "1".
+      photoLicensed: /^(si|sí|licencia|true|1)$/i.test(get(r, "licencia").trim()),
     });
   });
   return { items, errors };

@@ -41,6 +41,8 @@ export interface ISource {
   notes: string;
   /** Vino del Google Sheet: el sync la puede actualizar o apagar. */
   fromSheet: boolean;
+  /** Hay licencia para usar sus fotos. Con la política de fotos activa, solo estas se muestran (B2). */
+  photoLicensed: boolean;
   lastCheckedAt: Date | null;
   lastError: string;
   createdAt?: Date;
@@ -59,6 +61,7 @@ const sourceSchema = new Schema<ISource>(
     everyMinutes: { type: Number, default: 0, min: 0 },
     notes: { type: String, default: "" },
     fromSheet: { type: Boolean, default: false },
+    photoLicensed: { type: Boolean, default: false },
     lastCheckedAt: { type: Date, default: null },
     lastError: { type: String, default: "" },
   },

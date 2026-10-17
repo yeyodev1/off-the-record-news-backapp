@@ -15,6 +15,7 @@ import {
   VerificationFlag,
 } from "../models/article.model";
 import { Story } from "../models/story.model";
+import { Source } from "../models/source.model";
 import { env } from "../config/env";
 import * as verifierService from "./verifier.service";
 import { escapeRegex, pageParams, paginate } from "../utils/paginate";
@@ -59,6 +60,9 @@ export function toCard(doc: any, mode: ReadingMode | null = null): ArticleJSON {
   delete json.body;
   delete json.status;
   for (const key of PRIVATE_FIELDS) delete json[key];
+  // B2: con la política activa, la foto de una fuente sin licencia no se muestra;
+  // el front cae a la tarjeta propia (dato o marca). Las subidas por la Mesa van licenciadas.
+  if (env.PHOTOS_LICENSED_ONLY && json.image && !(json.image as any).licensed) json.image = null;
   return json;
 }
 
@@ -420,12 +424,15 @@ export async function imageFromSources(sources: ArticleSource[]): Promise<Articl
     if (!source.url) continue;
     const url = await rssService.fetchOgImage(source.url);
     if (url) {
+      // B2: ¿esta fuente tiene licencia para sus fotos? Se decide al publicar.
+      const src: any = await Source.findOne({ name: source.name }).select("photoLicensed").lean();
       return {
         url,
         credit: `Foto: ${source.name}`,
         sourceName: source.name,
         sourceUrl: source.url,
         kind: "photo",
+        licensed: !!src?.photoLicensed,
       };
     }
   }
@@ -772,6 +779,8 @@ export async function setImage(id: string, file: Express.Multer.File | undefined
     sourceName: "",
     sourceUrl: "",
     kind: "photo",
+    // La subió la Mesa: va licenciada, siempre se muestra.
+    licensed: true,
   };
   await doc.save();
   return doc.toJSON();

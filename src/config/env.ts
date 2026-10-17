@@ -42,6 +42,8 @@ export const env = {
   JWT_SECRET: required("JWT_SECRET"),
   CORS_ORIGINS: list("CORS_ORIGINS"),
   FRONTEND_URL: optional("FRONTEND_URL", "http://localhost:5173"),
+  // B2: con esto en true, solo se muestran fotos de fuentes con licencia; el resto cae a la tarjeta propia.
+  PHOTOS_LICENSED_ONLY: bool("PHOTOS_LICENSED_ONLY", false),
   SLACK_ERROR_WEBHOOK: optional("SLACK_ERROR_WEBHOOK", ""),
   ADMIN_EMAIL: optional("ADMIN_EMAIL", "admin@cliente.com").toLowerCase(),
   ADMIN_PASSWORD: optional("ADMIN_PASSWORD", ""),

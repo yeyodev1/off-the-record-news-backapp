@@ -86,6 +86,8 @@ export interface ArticleImage {
   caption?: string;
   /** La IA no pudo abrir la foto: no se reintenta. */
   reviewFailedAt?: Date | null;
+  /** La fuente tiene licencia para usar sus fotos (B2). Con la política activa, solo estas se muestran. */
+  licensed?: boolean;
 }
 
 export interface Infographic {
@@ -241,6 +243,7 @@ const imageSchema = new Schema<ArticleImage>(
     sourceUrl: { type: String, default: "" },
     kind: { type: String, enum: IMAGE_KINDS, default: "photo" },
     editorial: { type: String, enum: [...IMAGE_EDITORIAL, null], default: null },
+    licensed: { type: Boolean, default: false },
     caption: { type: String, default: "" },
     reviewFailedAt: { type: Date, default: null },
   },
