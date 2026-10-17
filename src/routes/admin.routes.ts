@@ -78,6 +78,8 @@ router.get("/newsroom/runs", adminController.listRuns);
 // La mesa por dentro: proceso en vivo e instrucciones de la Mesa para la IA
 router.get("/training/live", trainingController.live);
 router.post("/training/try", trainingController.tryHeadline);
+router.post("/training/chat", trainingController.chat);
+router.post("/training/chat/apply", trainingController.applyChat);
 router.get("/training/lessons", trainingController.listLessons);
 router.post("/training/lessons", trainingController.createLesson);
 router.put("/training/lessons/:id", trainingController.updateLesson);

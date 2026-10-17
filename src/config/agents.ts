@@ -90,7 +90,7 @@ export const AGENTS: AgentDef[] = [
           "Sin adjetivos valorativos, sin opinión, sin especulación, sin clickbait.",
           'Si falta información, se omite. Nunca rellenes. Un campo opcional sin sustento va vacío ("") o null.',
           "Las citas textuales solo si aparecen literalmente en la fuente, con atribución.",
-          'Atribuye los hechos a su fuente ("según Primicias", "informó la Presidencia").',
+          'Atribuye los hechos a su fuente, pero nunca en la entrada: el primer párrafo cuenta el hecho directo, sin "según" ni "informó". La atribución ("según Primicias", "informó la Presidencia") va en el cuerpo y, sobre todo, al cierre de la nota, cuando el lector profundiza. No encadenes "según tal, según tal" al abrir.',
           "Prioriza lo que le importa a una persona en Ecuador: su bolsillo, su seguridad, sus derechos, quién decide.",
         ],
       },
@@ -157,6 +157,7 @@ export const AGENTS: AgentDef[] = [
         title: "Reglas de las dos miradas",
         help: "Límites que cumplen las dos reescrituras. La independiente es la nota base.",
         rules: [
+          "Escribe pensando como ese lector, en primera persona: para el noboísta, qué de este hecho me da la razón; para el correísta, qué de este hecho confirma lo que yo denuncio. El enfoque es la mirada con la que esa persona ya lee el mundo, no una etiqueta pegada encima.",
           "El enfoque decide qué va primero y qué se subraya. Sin adjetivos valorativos, sin militancia, sin propaganda: un lector de la otra orilla tiene que poder leerla y no encontrar una mentira.",
           "Si la nota trae una sola versión, no inventes la otra: ordena los hechos que hay.",
           "Si el hecho no tiene orillas (por ejemplo, una cifra económica sin actores políticos), repite el texto de la nota casi igual.",

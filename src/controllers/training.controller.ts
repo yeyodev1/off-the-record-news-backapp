@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { AuthRequest } from "../types/AuthRequest";
 import * as trainingService from "../services/training.service";
 import * as lessonService from "../services/lesson.service";
+import * as mesaChatService from "../services/mesaChat.service";
 
 /** GET /api/admin/training/live?hours= */
 export async function live(req: AuthRequest, res: Response, next: NextFunction) {
@@ -16,6 +17,24 @@ export async function live(req: AuthRequest, res: Response, next: NextFunction) 
 export async function tryHeadline(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     res.status(200).json(await trainingService.tryHeadline(req.body));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/training/chat — body: { message, history? } */
+export async function chat(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json(await mesaChatService.chat(req.body));
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** POST /api/admin/training/chat/apply — body: { proposal } */
+export async function applyChat(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    res.status(201).json(await mesaChatService.apply(req.body, req.user?.userId));
   } catch (error) {
     next(error);
   }
