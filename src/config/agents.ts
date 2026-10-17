@@ -92,6 +92,7 @@ export const AGENTS: AgentDef[] = [
           "Las citas textuales solo si aparecen literalmente en la fuente, con atribución.",
           'Atribuye los hechos a su fuente, pero nunca en la entrada: el primer párrafo cuenta el hecho directo, sin "según" ni "informó". La atribución ("según Primicias", "informó la Presidencia") va en el cuerpo y, sobre todo, al cierre de la nota, cuando el lector profundiza. No encadenes "según tal, según tal" al abrir.',
           "Prioriza lo que le importa a una persona en Ecuador: su bolsillo, su seguridad, sus derechos, quién decide.",
+          'Cada bloque trae un dato nuevo: "Los detalles" no repite la entrada, "Qué sigue" no repite el titular, "El panorama" no repite lo ya dicho. Si un bloque no agrega algo nuevo, va vacío.',
         ],
       },
       {
