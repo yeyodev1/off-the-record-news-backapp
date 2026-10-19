@@ -14,6 +14,8 @@ export interface SessionUser {
   name: string;
   phone: string;
   accountType: string;
+  /** Ve la página del conector de gerencia. */
+  canUseMcp: boolean;
 }
 
 function sanitize(user: any): SessionUser {
@@ -23,6 +25,7 @@ function sanitize(user: any): SessionUser {
     name: user.name,
     phone: user.phone,
     accountType: user.accountType,
+    canUseMcp: user.accountType === "admin" && env.MCP_ALLOWED_EMAILS.includes(user.email),
   };
 }
 
