@@ -85,3 +85,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `Lesson` (`lesson.service.ts`): instrucciones de la Mesa en lenguaje normal por área (`general`, `valoracion`, `redaccion`, `modos`, `fotos`). `callJson({ area })` las suma al prompt de sistema; Jev las recibe en el estado como `instrucciones_de_la_mesa` y responde `mesa_no` / `mesa_si` (sí fuerza el umbral, no descarta). Caché de 60 s por instancia.
 - Corregir una señal desde el panel crea una lección `valoracion` con el caso de ejemplo.
 - Comportamiento base de los agentes (`config/agents.ts` + `AgentConfig`, `agentConfig.service.ts`): valorador, redactor, modos y fotos en secciones de reglas que la Mesa edita, agrega, quita y restaura desde `/admin/mesa/agentes`. Los prompts se arman con `agentConfig.bullets(agente, sección)`; fijos en código quedan los formatos del esquema JSON y "no inventar datos". Jev recibe `criterio_de_otr` en el estado y la pregunta `vetado` lo usa.
+
+## Conector de gerencia (MCP)
+
+- `POST /api/mcp/:token`: servidor MCP sin sesiones (Streamable HTTP, respuesta JSON) para que la gerencia pida cambios desde Claude. La llave va en la URL porque claude.ai no deja poner encabezados en un conector propio; se guarda solo su hash (`McpAccess`).
+- Acceso: solo cuentas admin en `MCP_ALLOWED_EMAILS`. Panel en `/admin/conector` (front): generar, rotar y apagar la llave, guía y bitácora (`McpChange`).
+- `github.service.ts`: lee, busca y commitea directo a `main` de los dos repos con `GITHUB_TOKEN`. Sin force. `PROTECTED` bloquea `.env`, `.github/`, `env.ts`, middlewares de auth y el propio conector.
+- Cada commit avisa por correo a `MCP_NOTIFY_EMAILS`. `deshacer_ultimo_cambio` solo deshace el último commit de main.
+- `registerTool` se llama sin inferir tipos (`register()` en `mcp.service.ts`): la inferencia del SDK sobre zod deja a tsc sin memoria.
