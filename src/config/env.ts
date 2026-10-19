@@ -111,4 +111,14 @@ export const env = {
   // en un chat privado el id del chat es el del usuario.
   TELEGRAM_EDITOR_IDS: [...list("TELEGRAM_EDITOR_IDS"), ...list("TELEGRAM_EDITOR_CHAT_IDS")],
   TELEGRAM_REPORTER_IDS: list("TELEGRAM_REPORTER_IDS"),
+
+  // Conector de gerencia (MCP): edita los repos del sitio con commits a main.
+  // Token de GitHub fine-grained con Contents: read/write solo en los dos repos.
+  GITHUB_TOKEN: optional("GITHUB_TOKEN", ""),
+  GITHUB_BACK_REPO: optional("GITHUB_BACK_REPO", "yeyodev1/off-the-record-news-backapp"),
+  GITHUB_FRONT_REPO: optional("GITHUB_FRONT_REPO", "yeyodev1/off-the-record-news-frontapp"),
+  // Solo estas cuentas del panel ven la página del conector y pueden usarlo.
+  MCP_ALLOWED_EMAILS: list("MCP_ALLOWED_EMAILS").map((e) => e.toLowerCase()),
+  // A quién se avisa de cada cambio hecho por el conector.
+  MCP_NOTIFY_EMAILS: list("MCP_NOTIFY_EMAILS"),
 } as const;
