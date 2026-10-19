@@ -10,6 +10,7 @@ import * as modeController from "../controllers/mode.controller";
 import * as proController from "../controllers/pro.controller";
 import * as trainingController from "../controllers/training.controller";
 import * as agentController from "../controllers/agent.controller";
+import * as mcpController from "../controllers/mcp.controller";
 
 const router = Router();
 
@@ -103,5 +104,10 @@ router.post("/tips/:id/draft", tipController.draft);
 router.get("/newsletters", adminController.listNewsletters);
 router.post("/newsletters/preview", adminController.previewNewsletter);
 router.post("/newsletters/:id/send", adminController.sendNewsletter);
+
+// Conector de gerencia (el servicio revisa que la cuenta esté en MCP_ALLOWED_EMAILS)
+router.get("/mcp", mcpController.status);
+router.post("/mcp/token", mcpController.rotate);
+router.delete("/mcp/token", mcpController.revoke);
 
 export default router;
