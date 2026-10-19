@@ -89,7 +89,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Conector de gerencia (MCP)
 
 - `POST /api/mcp/:token`: servidor MCP sin sesiones (Streamable HTTP, respuesta JSON) para que la gerencia pida cambios desde Claude. La llave va en la URL porque claude.ai no deja poner encabezados en un conector propio; se guarda solo su hash (`McpAccess`).
-- Acceso: solo cuentas admin en `MCP_ALLOWED_EMAILS`. Panel en `/admin/conector` (front): generar, rotar y apagar la llave, guía y bitácora (`McpChange`).
+- Acceso: solo cuentas admin en `MCP_ALLOWED_EMAILS`. Panel en `/admin/mcp` (front, ítem "MCP" del menú): generar, rotar y apagar la llave, guía y bitácora (`McpChange`).
 - `github.service.ts`: lee, busca y commitea directo a `main` de los dos repos con `GITHUB_TOKEN`. Sin force. `PROTECTED` bloquea `.env`, `.github/`, `env.ts`, middlewares de auth y el propio conector.
 - Cada commit avisa por correo a `MCP_NOTIFY_EMAILS`. `deshacer_ultimo_cambio` solo deshace el último commit de main.
 - `registerTool` se llama sin inferir tipos (`register()` en `mcp.service.ts`): la inferencia del SDK sobre zod deja a tsc sin memoria.
